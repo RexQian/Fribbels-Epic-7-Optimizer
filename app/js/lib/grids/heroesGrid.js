@@ -565,8 +565,9 @@ function renderClass(role) {
 
 
 function renderIcon(name) {
-    const url = HeroData.getHeroExtraInfo(name).assets.icon
-    const image = '<img class="heroIcon" src=' + url + '></img>';
+    const heroInfo = HeroData.getHeroExtraInfo(name);
+    const url = heroInfo && heroInfo.assets ? heroInfo.assets.icon : Assets.getBlank();
+    const image = '<img class="heroIcon" src="' + url + '"></img>';
     return image;
 }
 
