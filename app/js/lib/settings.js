@@ -11,6 +11,7 @@ var pathOverride;
 
 var excludeSelects = [];
 var enhanceLimit = 0;
+var useLocalCache = false; 
 var defaultOptimizerSettings = {
     settingDefaultUseReforgedStats: true,
     settingDefaultUseHeroPriority: false,
@@ -59,6 +60,7 @@ module.exports = {
             'settingLocatorWidth',
             'settingRageSet',
             'settingPenSet',
+            'settingUseLocalCache',
             'settingDefaultUseReforgedStats',
             'settingDefaultUseHeroPriority',
             'settingDefaultUseSubstatMods',
@@ -113,6 +115,10 @@ module.exports = {
         return defaultOptimizerSettings;
     },
 
+    getUseLocalCache: () => {
+        return useLocalCache;
+    },
+
     getDefaultSettings: () => {
         return {
             settingGpu: true,
@@ -128,6 +134,7 @@ module.exports = {
             settingEnhanceLimit: 0,
             settingDarkMode: true,
             settingArchetypes: GearRating.getDefaultArchetypes(),
+            settingUseLocalCache: true,
             settingDefaultUseReforgedStats: true,
             settingDefaultUseHeroPriority: false,
             settingDefaultUseSubstatMods: false,
@@ -181,6 +188,7 @@ module.exports = {
         document.getElementById('settingUnlockOnUnequip').checked = isNullUndefined(settings.settingUnlockOnUnequip) ? true : settings.settingUnlockOnUnequip;
         document.getElementById('settingRageSet').checked = isNullUndefined(settings.settingRageSet) ? true : settings.settingRageSet;
         document.getElementById('settingPenSet').checked = isNullUndefined(settings.settingPenSet) ? true : settings.settingPenSet;
+        document.getElementById('settingUseLocalCache').checked = isNullUndefined(settings.settingUseLocalCache) ? false : settings.settingUseLocalCache;
         document.getElementById('settingDefaultUseReforgedStats').checked = isNullUndefined(settings.settingDefaultUseReforgedStats) ? true : settings.settingDefaultUseReforgedStats;
         document.getElementById('settingDefaultUseHeroPriority').checked = settings.settingDefaultUseHeroPriority;
         document.getElementById('settingDefaultUseSubstatMods').checked = settings.settingDefaultUseSubstatMods;
@@ -240,18 +248,36 @@ module.exports = {
             DarkMode.toggle();
         }
 
-        if (settings.settingExcludeEquipped) {
-            console.log("BEFORE", $('#optionsExcludeGearFrom').multipleSelect('getOptions'))
-            console.log("BEFORE", $('#optionsExcludeGearFrom').multipleSelect('getSelects'))
-            $('#optionsExcludeGearFrom').multipleSelect('setSelects', settings.settingExcludeEquipped)
-            console.log("AFTER", $('#optionsExcludeGearFrom').multipleSelect('getSelects'))
+        if (settings.settingExcludeEquipped && Array.isArray(settings.settingExcludeEquipped)) {
+            // Check if multipleSelect is initialized before using it
+            try {
+                const $element = $('#optionsExcludeGearFrom');
+                if ($element.length > 0 && typeof $element.multipleSelect === 'function') {
+                    console.log("BEFORE", $element.multipleSelect('getOptions'))
+                    console.log("BEFORE", $element.multipleSelect('getSelects'))
+                    $element.multipleSelect('setSelects', settings.settingExcludeEquipped)
+                    console.log("AFTER", $element.multipleSelect('getSelects'))
+                }
+            } catch (e) {
+                console.warn("multipleSelect not initialized yet for optionsExcludeGearFrom", e);
+            }
             excludeSelects = settings.settingExcludeEquipped;
         }
 
-        if (settings.settingEnhanceLimit) {
-            $('#optionsEnhanceLimit').multipleSelect('setSelects', settings.settingEnhanceLimit)
+        if (settings.settingEnhanceLimit && Array.isArray(settings.settingEnhanceLimit)) {
+            // Check if multipleSelect is initialized before using it
+            try {
+                const $element = $('#optionsEnhanceLimit');
+                if ($element.length > 0 && typeof $element.multipleSelect === 'function') {
+                    $element.multipleSelect('setSelects', settings.settingEnhanceLimit)
+                }
+            } catch (e) {
+                console.warn("multipleSelect not initialized yet for optionsEnhanceLimit", e);
+            }
             enhanceLimit = settings.settingEnhanceLimit;
         }
+
+        useLocalCache = isNullUndefined(settings.settingUseLocalCache) ? false : settings.settingUseLocalCache;
 
   // "settingBackgroundColor": "#212529",
   // "settingTextColorPicker": "#e2e2e2",
@@ -299,6 +325,7 @@ module.exports = {
             settingUnlockOnUnequip: document.getElementById('settingUnlockOnUnequip').checked,
             settingRageSet: document.getElementById('settingRageSet').checked,
             settingPenSet: document.getElementById('settingPenSet').checked,
+            settingUseLocalCache: document.getElementById('settingUseLocalCache').checked,
             settingDefaultUseReforgedStats: document.getElementById('settingDefaultUseReforgedStats').checked,
             settingDefaultUseHeroPriority: document.getElementById('settingDefaultUseHeroPriority').checked,
             settingDefaultUseSubstatMods: document.getElementById('settingDefaultUseSubstatMods').checked,
@@ -335,6 +362,7 @@ module.exports = {
 
         excludeSelects = settings.settingExcludeEquipped;
         enhanceLimit = settings.settingEnhanceLimit;
+        useLocalCache = settings.settingUseLocalCache;
 
         Files.saveFile(settingsPath, JSON.stringify(settings, null, 2))
         if (Files.isMac()) {

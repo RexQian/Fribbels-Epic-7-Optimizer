@@ -5,7 +5,60 @@ var eesByName = {};
 var HERO_CACHE = "http://e7-optimizer-game-data.s3-accelerate.amazonaws.com/herodata.json?";
 var ARTIFACT_CACHE = "http://e7-optimizer-game-data.s3-accelerate.amazonaws.com/artifactdata.json?";
 
-global.TEST = true
+global.TEST = false
+
+// Convert GitHub URL to local file path
+function convertImageUrlToLocal(url) {
+    if (!url || typeof url !== 'string') {
+        return url;
+    }
+    
+    // Match GitHub cachedimages URL
+    const githubPattern = /https:\/\/raw\.githubusercontent\.com\/fribbels\/Fribbels-Epic-7-Optimizer\/main\/data\/cachedimages\/([^?]+)/;
+    const match = url.match(githubPattern);
+    
+    if (match) {
+        const filename = match[1];
+        // Use file:// protocol to point to local file
+        const localPath = Files.getDataPath() + '/cachedimages/' + filename;
+        // Normalize path: Windows uses backslashes, need to convert to forward slashes and add file:// prefix
+        let normalizedPath = Files.path(localPath);
+        // Convert backslashes to forward slashes
+        normalizedPath = normalizedPath.replace(/\\/g, '/');
+        // If path is absolute (Windows C:\ or Unix /), add file:// prefix
+        // Windows paths need three slashes: file:///C:/path
+        // Unix paths need three slashes: file:///path
+        if (normalizedPath.match(/^[A-Z]:/)) {
+            // Windows absolute path
+            return 'file:///' + normalizedPath;
+        } else if (normalizedPath.startsWith('/')) {
+            // Unix absolute path
+            return 'file://' + normalizedPath;
+        } else {
+            return 'file:///' + normalizedPath;
+        }
+    }
+    
+    return url;
+}
+
+// Convert image URLs in hero data
+function convertHeroImageUrls(heroData) {
+    if (!heroData || !heroData.assets) {
+        return heroData;
+    }
+    
+    const converted = { ...heroData };
+    if (converted.assets) {
+        converted.assets = {
+            icon: convertImageUrlToLocal(converted.assets.icon),
+            image: convertImageUrlToLocal(converted.assets.image),
+            thumbnail: convertImageUrlToLocal(converted.assets.thumbnail)
+        };
+    }
+    
+    return converted;
+}
 
 function UrlExists(url, cb){
     jQuery.ajax({
@@ -40,6 +93,9 @@ try {
 module.exports = {
 
     initialize: async () => {
+        // Check if using local cache
+        const useLocalCache = Settings && Settings.getUseLocalCache ? Settings.getUseLocalCache() : false;
+        
         try {
             var heroesByNameStr = await Files.readFileSync(Files.getDataPath() + '/cache/herodata.json');
             heroesByName = JSON.parse(heroesByNameStr);
@@ -57,7 +113,17 @@ module.exports = {
         }
 
         try {
-            if (global.TEST) {
+            if (useLocalCache) {
+                // Use local cached data
+                console.log("Using local cache for hero data");
+                const heroOverride = JSON.parse(await Files.readFileSync(Files.getDataPath() + "/cache/herodata.json"));
+                heroesByName = heroOverride;
+                
+                // Convert image URLs to local paths
+                Object.keys(heroesByName).forEach(key => {
+                    heroesByName[key] = convertHeroImageUrls(heroesByName[key]);
+                });
+            } else if (global.TEST) {
                 const heroOverride = JSON.parse(await Files.readFileSync(Files.getDataPath() + "/cache/herodata.json"));
                 heroesByName = heroOverride;
             } else {
@@ -71,8 +137,12 @@ module.exports = {
         }
 
         try {
-
-            if (global.TEST) {
+            if (useLocalCache) {
+                // Use local cached data
+                console.log("Using local cache for artifact data");
+                const artifactOverride = JSON.parse(await Files.readFileSync(Files.getDataPath() + "/cache/artifactdata.json"));
+                artifactsByName = artifactOverride;
+            } else if (global.TEST) {
                 const artifactOverride = JSON.parse(await Files.readFileSync(Files.getDataPath() + "/cache/artifactdata.json"));
                 artifactsByName = artifactOverride;
             } else {
@@ -172,6 +242,16 @@ module.exports = {
 
     getHeroExtraInfo: (name) => {
         const heroInfo = heroesByName[name];
+        if (!heroInfo) {
+            return null;
+        }
+        
+        // If using local cache, ensure image URLs are local paths
+        const useLocalCache = Settings && Settings.getUseLocalCache ? Settings.getUseLocalCache() : false;
+        if (useLocalCache) {
+            return convertHeroImageUrls(heroInfo);
+        }
+        
         return heroInfo;
     },
 

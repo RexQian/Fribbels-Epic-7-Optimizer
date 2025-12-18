@@ -110,11 +110,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     await I18n.initialize();
 
     Subprocess.initialize(async () => {
-        await HeroData.initialize();
-
         Notifier.initialize();
         Dialog.initialize();
         Selectors.initialize();
+        await Settings.initialize();
+        await HeroData.initialize();
 
         ZarrocConverter.initialize();
         OptimizerTab.initialize();
@@ -123,8 +123,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         ItemsGrid.initialize();
         HeroesTab.initialize();
         HeroesGrid.initialize();
-
-        await Settings.initialize();
         Saves.initialize();
         await Saves.loadAutoSave();
         MultiOptimizerTab.initialize();
