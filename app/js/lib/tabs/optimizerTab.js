@@ -1005,7 +1005,7 @@ async function redrawHeroImage() {
 
 
     const data = HeroData.getHeroExtraInfo(name);
-    const image = data.assets.thumbnail;
+    const image = data ? data.assets.thumbnail : Assets.getBlank();
     $('#inputHeroImage').attr("src", image);
 
 

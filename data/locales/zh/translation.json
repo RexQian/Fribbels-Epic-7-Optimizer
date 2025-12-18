@@ -644,6 +644,7 @@
     "Use hero priority": "使用英雄优先度",
     "Use merge to update all your gear after using the scanner or screenshot tool.": "如果你使用的是自动导入或者截图导入方式，请用合并数据按钮更新全部装备数据.",
     "Use merge to update all your gear with new screenshots.": "使用 '合并数据' 来使用新的截图更新你所有的装备",
+    "Use local cached data": "使用本地缓存数据",
     "Use penetration set bonus for damage optimization": "配装时计算穿透套装效果",
     "Use rage set bonus for damage optimization": "计算伤害时考虑愤怒套加成",
     "Use reforged stats": "使用重铸后的属性",
