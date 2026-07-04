@@ -694,6 +694,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
 
         final int SETTING_RAGE_SET = StatCalculator.SETTING_RAGE_SET ? 1 : 0;
         final int SETTING_PEN_SET = StatCalculator.SETTING_PEN_SET ? 1 : 0;
+        final int SETTING_FERVOR_SET = StatCalculator.SETTING_FERVOR_SET ? 1 : 0;
 
         final long maxPerms = wSize * hSize * aSize * nSize * rSize * bSize;
 
@@ -737,6 +738,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                     bonusMaxHp,
                     SETTING_RAGE_SET,
                     SETTING_PEN_SET,
+                    SETTING_FERVOR_SET,
                     base,
                     hero,
                     ARG_COUNT,
@@ -1445,6 +1447,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
             final float bonusMaxHp,
             final int SETTING_RAGE_SET,
             final int SETTING_PEN_SET,
+            final int SETTING_FERVOR_SET,
             final HeroStats base,
             final Hero hero,
             final long argSize,
@@ -1482,6 +1485,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                     bonusMaxHp,
                     SETTING_RAGE_SET,
                     SETTING_PEN_SET,
+                    SETTING_FERVOR_SET,
                     base,
                     hero,
                     argSize,
@@ -1519,6 +1523,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                 bonusMaxHp,
                 SETTING_RAGE_SET,
                 SETTING_PEN_SET,
+                SETTING_FERVOR_SET,
                 base,
                 hero,
                 argSize,
