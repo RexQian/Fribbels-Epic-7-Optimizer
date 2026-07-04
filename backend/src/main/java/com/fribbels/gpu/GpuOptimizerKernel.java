@@ -761,10 +761,11 @@ public class GpuOptimizerKernel extends Kernel {
             final int cp = (int) (((atk * 1.6f + atk * 1.6f * critRate * critDamage) * (1.0 + (spd - 45f) * 0.02f) + hp + def * 9.3f) * (1f + (res/100f + eff/100f) / 4f));
 
             final float penSetOn = min(penSet, 1);
+            final float fervorSetOn = min(fervorSet, 1);
             final float rageMultiplier = max(0, rageSet * SETTING_RAGE_SET * 0.3f);
             final float penMultiplier = max(1, penSetOn * SETTING_PEN_SET * penSetDmgBonus);
             final float torrentMultiplier = max(0, torrentSet * 0.1f);
-            final float fervorMultiplier = max(1, fervorSet * SETTING_FERVOR_SET * 0.2f);
+            final float fervorMultiplier = max(0, fervorSetOn * SETTING_FERVOR_SET * 0.2f);
             final float spdDiv1000 = (float)spd/1000;
             final float pctDmgMultiplier = 1 + rageMultiplier + torrentMultiplier + fervorMultiplier;
 
