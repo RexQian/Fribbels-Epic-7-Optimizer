@@ -46,6 +46,7 @@ public class GpuOptimizerKernel extends Kernel {
 
     @Constant final int SETTING_RAGE_SET;
     @Constant final int SETTING_PEN_SET;
+    @Constant final int SETTING_FERVOR_SET;
 
     @Constant final float baseAtk;
     @Constant final float baseHp;
@@ -226,6 +227,7 @@ public class GpuOptimizerKernel extends Kernel {
             final float bonusMaxHp,
             final int SETTING_RAGE_SET,
             final int SETTING_PEN_SET,
+            final int SETTING_FERVOR_SET,
             final HeroStats base,
             final Hero hero,
             final long argSize,
@@ -341,6 +343,7 @@ public class GpuOptimizerKernel extends Kernel {
 
         this.SETTING_RAGE_SET = SETTING_RAGE_SET;
         this.SETTING_PEN_SET = SETTING_PEN_SET;
+        this.SETTING_FERVOR_SET = SETTING_FERVOR_SET;
 
         this.baseAtk = base.atk;
         this.baseHp = base.hp;
@@ -699,10 +702,12 @@ public class GpuOptimizerKernel extends Kernel {
 //            final int protectionSet = (int)((setSolutionBitMasks[setIndex] >>> 26) & 1L);
             final int torrentSet = (int)(((setSolutionBitMasks[setIndex] >>> 27) & 1L) + ((setSolutionBitMasks[setIndex] >>> 28) & 1L) + ((setSolutionBitMasks[setIndex] >>> 29) & 1L));
             final int reversalSet = (int)((setSolutionBitMasks[setIndex] >>> 30) & 1L);
-            final int riposteSet = (int)((setSolutionBitMasks[setIndex] >>> 31) & 1L);
+//            final int riposteSet = (int)((setSolutionBitMasks[setIndex] >>> 31) & 1L);
             final int warfareSet = (int)((setSolutionBitMasks[setIndex] >>> 32) & 1L);
-            final int pursuitSet = (int)((setSolutionBitMasks[setIndex] >>> 33) & 1L);
+//            final int pursuitSet = (int)((setSolutionBitMasks[setIndex] >>> 33) & 1L);
             final int weakeningSet = (int)((setSolutionBitMasks[setIndex] >>> 34) & 1L);
+            final int fervorSet = (int)((setSolutionBitMasks[setIndex] >>> 35) & 1L);
+
 
             // Set calculations using localbuffer instead off mask
 //            localSetsBuffer[setJump] = 0;
@@ -756,11 +761,13 @@ public class GpuOptimizerKernel extends Kernel {
             final int cp = (int) (((atk * 1.6f + atk * 1.6f * critRate * critDamage) * (1.0 + (spd - 45f) * 0.02f) + hp + def * 9.3f) * (1f + (res/100f + eff/100f) / 4f));
 
             final float penSetOn = min(penSet, 1);
+            final float fervorSetOn = min(fervorSet, 1);
             final float rageMultiplier = max(0, rageSet * SETTING_RAGE_SET * 0.3f);
             final float penMultiplier = max(1, penSetOn * SETTING_PEN_SET * penSetDmgBonus);
             final float torrentMultiplier = max(0, torrentSet * 0.1f);
+            final float fervorMultiplier = max(0, fervorSetOn * SETTING_FERVOR_SET * 0.2f);
             final float spdDiv1000 = (float)spd/1000;
-            final float pctDmgMultiplier = 1 + rageMultiplier + torrentMultiplier;
+            final float pctDmgMultiplier = 1 + rageMultiplier + torrentMultiplier + fervorMultiplier;
 
             final int ehp = (int) (hp * (def/300 + 1));
             final int hpps = (int) (hp*spdDiv1000);

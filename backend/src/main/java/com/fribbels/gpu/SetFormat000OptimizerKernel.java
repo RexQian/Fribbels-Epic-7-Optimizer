@@ -6,8 +6,8 @@ import com.fribbels.request.OptimizationRequest;
 
 public class SetFormat000OptimizerKernel extends GpuOptimizerKernel {
 
-    public SetFormat000OptimizerKernel(final OptimizationRequest request, final float[] flattenedWeaponAccs, final float[] flattenedHelmetAccs, final float[] flattenedArmorAccs, final float[] flattenedNecklaceAccs, final float[] flattenedRingAccs, final float[] flattenedBootAccs, final float bonusBaseAtk, final float bonusBaseDef, final float bonusBaseHp, final float atkSetBonus, final float hpSetBonus, final float defSetBonus, final float speedSetBonus, final float revengeSetBonus, final float reversalSetBonus, final float penSetDmgBonus, final float targetDefense, final float bonusMaxAtk, final float bonusMaxDef, final float bonusMaxHp, final int SETTING_RAGE_SET, final int SETTING_PEN_SET, final HeroStats base, final Hero hero, final long argSize, final long wSize, final long hSize, final long aSize, final long nSize, final long rSize, final long bSize, final long max, final long[] setSolutionBitMasks) {
-        super(request, flattenedWeaponAccs, flattenedHelmetAccs, flattenedArmorAccs, flattenedNecklaceAccs, flattenedRingAccs, flattenedBootAccs, bonusBaseAtk, bonusBaseDef, bonusBaseHp, atkSetBonus, hpSetBonus, defSetBonus, speedSetBonus, revengeSetBonus, reversalSetBonus, penSetDmgBonus, targetDefense, bonusMaxAtk, bonusMaxDef, bonusMaxHp, SETTING_RAGE_SET, SETTING_PEN_SET, base, hero, argSize, wSize, hSize, aSize, nSize, rSize, bSize, max, setSolutionBitMasks);
+    public SetFormat000OptimizerKernel(final OptimizationRequest request, final float[] flattenedWeaponAccs, final float[] flattenedHelmetAccs, final float[] flattenedArmorAccs, final float[] flattenedNecklaceAccs, final float[] flattenedRingAccs, final float[] flattenedBootAccs, final float bonusBaseAtk, final float bonusBaseDef, final float bonusBaseHp, final float atkSetBonus, final float hpSetBonus, final float defSetBonus, final float speedSetBonus, final float revengeSetBonus, final float reversalSetBonus, final float penSetDmgBonus, final float targetDefense, final float bonusMaxAtk, final float bonusMaxDef, final float bonusMaxHp, final int SETTING_RAGE_SET, final int SETTING_PEN_SET, final int SETTING_FERVOR_SET, final HeroStats base, final Hero hero, final long argSize, final long wSize, final long hSize, final long aSize, final long nSize, final long rSize, final long bSize, final long max, final long[] setSolutionBitMasks) {
+        super(request, flattenedWeaponAccs, flattenedHelmetAccs, flattenedArmorAccs, flattenedNecklaceAccs, flattenedRingAccs, flattenedBootAccs, bonusBaseAtk, bonusBaseDef, bonusBaseHp, atkSetBonus, hpSetBonus, defSetBonus, speedSetBonus, revengeSetBonus, reversalSetBonus, penSetDmgBonus, targetDefense, bonusMaxAtk, bonusMaxDef, bonusMaxHp, SETTING_RAGE_SET, SETTING_PEN_SET, SETTING_FERVOR_SET, base, hero, argSize, wSize, hSize, aSize, nSize, rSize, bSize, max, setSolutionBitMasks);
     }
 
     @Override
@@ -157,6 +157,7 @@ public class SetFormat000OptimizerKernel extends GpuOptimizerKernel {
             final int reversalSet = (int)((setSolutionBitMasks[setIndex] >>> 30) & 1L);
             final int warfareSet = (int)((setSolutionBitMasks[setIndex] >>> 32) & 1L);
             final int weakeningSet = (int)((setSolutionBitMasks[setIndex] >>> 34) & 1L);
+            final int fervorSet = (int)((setSolutionBitMasks[setIndex] >>> 35) & 1L);
 
             final float atk =  ((bonusBaseAtk  + wAtk+hAtk+aAtk+nAtk+rAtk+bAtk + (atkSet * atkSetBonus)) * bonusMaxAtk);
             final float hp =   ((bonusBaseHp   + wHp+hHp+aHp+nHp+rHp+bHp + (hpSet * hpSetBonus + warfareSet * hpSetBonus + torrentSet * hpSetBonus/-2)) * bonusMaxHp);
@@ -173,11 +174,13 @@ public class SetFormat000OptimizerKernel extends GpuOptimizerKernel {
             final int cp = (int) (((atk * 1.6f + atk * 1.6f * critRate * critDamage) * (1.0 + (spd - 45f) * 0.02f) + hp + def * 9.3f) * (1f + (res/100f + eff/100f) / 4f));
 
             final float penSetOn = min(penSet, 1);
+            final float fervorSetOn = min(fervorSet, 1);
             final float rageMultiplier = max(0, rageSet * SETTING_RAGE_SET * 0.3f);
             final float penMultiplier = max(1, penSetOn * SETTING_PEN_SET * penSetDmgBonus);
+            final float fervorMultiplier = max(0, fervorSetOn * SETTING_FERVOR_SET * 0.2f);
             final float torrentMultiplier = max(0, torrentSet * 0.1f);
             final float spdDiv1000 = (float)spd/1000;
-            final float pctDmgMultiplier = 1 + rageMultiplier + torrentMultiplier;
+            final float pctDmgMultiplier = 1 + rageMultiplier + torrentMultiplier+ fervorMultiplier;
 
             final int ehp = (int) (hp * (def/300 + 1));
             final int hpps = (int) (hp*spdDiv1000);

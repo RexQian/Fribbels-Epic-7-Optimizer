@@ -12,6 +12,7 @@ public class StatCalculator {
 
     public static boolean SETTING_RAGE_SET = true;
     public static boolean SETTING_PEN_SET = true;
+    public static boolean SETTING_FERVOR_SET = true;
     public static int SETTING_PEN_DEFENSE = 1500;
 
     private float atkSetBonus;
@@ -126,8 +127,9 @@ public class StatCalculator {
         final float rageMultiplier = SETTING_RAGE_SET && sets[11] > 3 ? 0.3f : 0;
         final float penMultiplier = SETTING_PEN_SET && sets[13] > 1 ? penSetDmgBonus : 1;
         final float torrentMultiplier = sets[17] > 1 ? sets[17] / 2 * 0.1f : 0;
+        final float fervorMultiplier = SETTING_FERVOR_SET && sets[23] > 1 ? 0.2f : 0;
         final float spdDiv1000 = (float)spd/1000;
-        final float pctDmgMultiplier = 1 + rageMultiplier + torrentMultiplier;
+        final float pctDmgMultiplier = 1 + rageMultiplier + torrentMultiplier + fervorMultiplier;
 
         final int ehp = (int) (hp * (def/300 + 1));
         final int hpps = (int) (hp*spdDiv1000);

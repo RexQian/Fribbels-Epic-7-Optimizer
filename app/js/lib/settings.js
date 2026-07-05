@@ -60,6 +60,7 @@ module.exports = {
             'settingLocatorWidth',
             'settingRageSet',
             'settingPenSet',
+            'settingFervorSet',
             'settingUseLocalCache',
             'settingDefaultUseReforgedStats',
             'settingDefaultUseHeroPriority',
@@ -125,6 +126,7 @@ module.exports = {
             settingUnlockOnUnequip: true,
             settingRageSet: true,
             settingPenSet: true,
+            settingFervorSet: true,
             settingMaxResults: 5_000_000,
             settingMaxRamGb: 6,
             settingPenDefense: 1_500,
@@ -188,6 +190,7 @@ module.exports = {
         document.getElementById('settingUnlockOnUnequip').checked = isNullUndefined(settings.settingUnlockOnUnequip) ? true : settings.settingUnlockOnUnequip;
         document.getElementById('settingRageSet').checked = isNullUndefined(settings.settingRageSet) ? true : settings.settingRageSet;
         document.getElementById('settingPenSet').checked = isNullUndefined(settings.settingPenSet) ? true : settings.settingPenSet;
+        document.getElementById('settingFervorSet').checked = isNullUndefined(settings.settingFervorSet) ? true : settings.settingFervorSet;
         document.getElementById('settingUseLocalCache').checked = isNullUndefined(settings.settingUseLocalCache) ? false : settings.settingUseLocalCache;
         document.getElementById('settingDefaultUseReforgedStats').checked = isNullUndefined(settings.settingDefaultUseReforgedStats) ? true : settings.settingDefaultUseReforgedStats;
         document.getElementById('settingDefaultUseHeroPriority').checked = settings.settingDefaultUseHeroPriority;
@@ -210,6 +213,11 @@ module.exports = {
         if (isNullUndefined(settings.settingPenSet)) {
             settings.settingPenSet = true;
         }
+
+        if (isNullUndefined(settings.settingFervorSet)) {
+            settings.settingFervorSet = true;
+        }
+
 
         if (isNullUndefined(settings.settingGpu)) {
             settings.settingGpu = true;
@@ -325,6 +333,7 @@ module.exports = {
             settingUnlockOnUnequip: document.getElementById('settingUnlockOnUnequip').checked,
             settingRageSet: document.getElementById('settingRageSet').checked,
             settingPenSet: document.getElementById('settingPenSet').checked,
+            settingFervorSet: document.getElementById('settingFervorSet').checked,
             settingUseLocalCache: document.getElementById('settingUseLocalCache').checked,
             settingDefaultUseReforgedStats: document.getElementById('settingDefaultUseReforgedStats').checked,
             settingDefaultUseHeroPriority: document.getElementById('settingDefaultUseHeroPriority').checked,
