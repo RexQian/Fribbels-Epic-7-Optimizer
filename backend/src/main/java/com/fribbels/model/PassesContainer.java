@@ -6,7 +6,7 @@ import lombok.Data;
 @Data
 @Builder
 public class PassesContainer {
-    boolean[] passes;
-    boolean locked;
+    int[] passBits;
+    volatile boolean locked;
     String id;
 }
