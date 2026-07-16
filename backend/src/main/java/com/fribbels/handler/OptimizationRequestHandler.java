@@ -39,6 +39,10 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -66,8 +70,6 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
     private AtomicLong searchedCounter = new AtomicLong(0);
     private AtomicLong resultsCounter = new AtomicLong(0);
 
-    private long[] setSolutionBitMasks;
-
     private boolean canUseGpu = true;
 
     public static final int SET_COUNT = 24;
@@ -76,10 +78,64 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
     //
     private static final int SET_EXPONENTIAL = 191102976; // 24 ^ 6
 
-    private boolean[] permutations = new boolean[SET_EXPONENTIAL];
-    private int[] setPermutationIndicesPlusOne = new int[SET_EXPONENTIAL];
+    // One bit is enough to mark each valid combination of six equipment sets.
+    private static final int SET_PERMUTATION_WORDS = (SET_EXPONENTIAL + Long.SIZE - 1) / Long.SIZE;
+    private final long[] setPermutationBits = new long[SET_PERMUTATION_WORDS];
+
+    private static final int GPU_CHUNK_SIZE = boundedIntegerProperty("fribbels.gpu.chunkSize", 8_388_608, 1_048_576, 67_108_864);
+    private static final int GPU_WORK_GROUP_SIZE = boundedIntegerProperty("fribbels.gpu.workGroupSize", 256, 32, 1024);
+    private static final int GPU_CPU_WORKERS = boundedIntegerProperty(
+            "fribbels.gpu.cpuWorkers",
+            Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() - 1)),
+            2,
+            16);
+    private static final boolean GPU_EXPLICIT_BUFFERS = Boolean.parseBoolean(configurationValue("fribbels.gpu.explicitBuffers", "true"));
+    private static final boolean GPU_PROFILE = Boolean.parseBoolean(configurationValue("fribbels.gpu.profile", "false"));
+    private static final String GPU_PROFILE_LOG = configurationValue("fribbels.gpu.profileLog", "");
 
     public static OptimizationRequestHandler instance;
+
+    private static int boundedIntegerProperty(final String name, final int defaultValue, final int min, final int max) {
+        final int configured;
+        try {
+            configured = Integer.parseInt(configurationValue(name, String.valueOf(defaultValue)));
+        } catch (final NumberFormatException e) {
+            return defaultValue;
+        }
+        return Math.max(min, Math.min(max, configured));
+    }
+
+    private static String configurationValue(final String propertyName, final String defaultValue) {
+        final String propertyValue = System.getProperty(propertyName);
+        if (propertyValue != null) {
+            return propertyValue;
+        }
+
+        final String environmentName = propertyName
+                .replaceAll("([a-z])([A-Z])", "$1_$2")
+                .replace('.', '_')
+                .toUpperCase(Locale.ROOT);
+        return System.getenv().getOrDefault(environmentName, defaultValue);
+    }
+
+    private static synchronized void logGpuProfile(final String format, final Object... args) {
+        final String line = String.format(Locale.US, format, args);
+        System.out.println(line);
+        if (GPU_PROFILE_LOG.isEmpty()) {
+            return;
+        }
+
+        try {
+            Files.write(
+                    Paths.get(GPU_PROFILE_LOG),
+                    Collections.singletonList(line),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } catch (final IOException e) {
+            System.err.println("Unable to write GPU profile log: " + e.getMessage());
+        }
+    }
 
     public void configureGpu(final boolean gpuEnabled) {
         System.out.println("GPU acceleration enabled: " + gpuEnabled);
@@ -92,111 +148,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
             System.out.println(KernelManager.instance().bestDevice().getType());
 
 
-            ExecutorService t = Executors.newFixedThreadPool(3);
-            t.execute(() -> {
-                try {
-                    System.out.println("Starting setSolutionBitMasks generation...");
-                    long start = System.currentTimeMillis();
-                    setSolutionBitMasks = new long[SET_EXPONENTIAL];
-                    int count = 0;
-                    for (int a = 0; a < SET_COUNT; a++) {
-                        for (int b = 0; b < SET_COUNT; b++) {
-                            for (int c = 0; c < SET_COUNT; c++) {
-                                for (int d = 0; d < SET_COUNT; d++) {
-                                    for (int e = 0; e < SET_COUNT; e++) {
-                                        for (int f = 0; f < SET_COUNT; f++) {
-                                            int[] sets = new int[]{a, b, c, d, e, f};
-                                            int[] counters = convertSetsToSetCounters(sets);
-
-                                            long l = 0;
-
-                                            l += counters[23] / 2 > 0 ? 1L : 0L; // fervor
-                                            l <<= 1;
-                                            l += counters[22] / 4 > 0 ? 1L : 0L; // weakening
-                                            l <<= 1;
-                                            l += counters[21] / 2 > 0 ? 1L : 0L; // pursuit
-                                            l <<= 1;
-                                            l += counters[20] / 4 > 0 ? 1L : 0L; // warfare (opener)
-                                            l <<= 1;
-                                            l += counters[19] / 4 > 0 ? 1L : 0L; // riposte
-                                            l <<= 1;
-                                            l += counters[18] / 4 > 0 ? 1L : 0L; // reversal
-                                            l <<= 1;
-                                            l += counters[17] / 2 > 0 ? 1L : 0L; // torrent 1
-                                            l <<= 1;
-                                            l += counters[17] / 2 - 1 > 0 ? 1L : 0L; // torrent 2
-                                            l <<= 1;
-                                            l += counters[17] / 2 - 2 > 0 ? 1L : 0L; // torrent 3
-                                            l <<= 1;
-                                            l += counters[16] / 4 > 0 ? 1L : 0L; // protection
-                                            l <<= 1;
-                                            l += counters[15] / 4 > 0 ? 1L : 0L; // injury
-                                            l <<= 1;
-                                            l += counters[14] / 4 > 0 ? 1L : 0L; // revenge
-                                            l <<= 1;
-                                            l += counters[13] / 2 > 0 ? 1L : 0L; // pen
-                                            l <<= 1;
-                                            l += counters[12] / 2 > 0 ? 1L : 0L; // immunity
-                                            l <<= 1;
-                                            l += counters[11] / 4 > 0 ? 1L : 0L; // rage
-                                            l <<= 1;
-                                            l += counters[10] / 2 > 0 ? 1L : 0L; // unity - should be x3 but don't need it
-                                            l <<= 1;
-                                            l += counters[9] / 2 > 0 ? 1L : 0L; // res1
-                                            l <<= 1;
-                                            l += counters[9] / 2 - 1 > 0 ? 1L : 0L; // res2
-                                            l <<= 1;
-                                            l += counters[9] / 2 - 2 > 0 ? 1L : 0L; // res3
-                                            l <<= 1;
-                                            l += counters[8] / 4 > 0 ? 1L : 0L; // counter
-                                            l <<= 1;
-                                            l += counters[7] / 4 > 0 ? 1L : 0L; // lifesteal
-                                            l <<= 1;
-                                            l += counters[6] / 4 > 0 ? 1L : 0L; // destr
-                                            l <<= 1;
-                                            l += counters[5] / 2 > 0 ? 1L : 0L; // hit1
-                                            l <<= 1;
-                                            l += counters[5] / 2 - 1 > 0 ? 1L : 0L; // hit2
-                                            l <<= 1;
-                                            l += counters[5] / 2 - 2 > 0 ? 1L : 0L; // hit3
-                                            l <<= 1;
-                                            l += counters[4] / 2 > 0 ? 1L : 0L; // crit1
-                                            l <<= 1;
-                                            l += counters[4] / 2 - 1 > 0 ? 1L : 0L; // crit2
-                                            l <<= 1;
-                                            l += counters[4] / 2 - 2 > 0 ? 1L : 0L;  // crit3
-                                            l <<= 1;
-                                            l += counters[3] / 4 > 0 ? 1L : 0L; // spd
-                                            l <<= 1;
-                                            l += counters[2] / 4 > 0 ? 1L : 0L; // atk
-                                            l <<= 1;
-                                            l += counters[1] / 2 > 0 ? 1L : 0L; // def1
-                                            l <<= 1;
-                                            l += counters[1] / 2 - 1 > 0 ? 1L : 0L; // def2
-                                            l <<= 1;
-                                            l += counters[1] / 2 - 2 > 0 ? 1L : 0L; // def3
-                                            l <<= 1;
-                                            l += counters[0] / 2 > 0 ? 1L : 0L; // hp1
-                                            l <<= 1;
-                                            l += counters[0] / 2 - 1 > 0 ? 1L : 0L; // hp2
-                                            l <<= 1;
-                                            l += counters[0] / 2 - 2 > 0 ? 1L : 0L; // hp3
-
-                                            setSolutionBitMasks[count] = l;
-                                            count++;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    System.out.println("Finished setSolutionBitMasks generation in " + (System.currentTimeMillis() - start) + "ms. First element: " + setSolutionBitMasks[0] + ", Last element: " + setSolutionBitMasks[setSolutionBitMasks.length - 1]);
-                } catch (Throwable e) {
-                     System.err.println("Error generating set solution bit masks: ");
-                     e.printStackTrace();
-                }
-            });
-
+            ExecutorService t = Executors.newFixedThreadPool(1);
             t.execute(() -> {
                 try {
                     final boolean isIntel = KernelManager
@@ -241,12 +193,6 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
         instance = this;
         optimizationDbs = new HashMap<>();
 
-        ExecutorService t = Executors.newFixedThreadPool(3);
-
-        t.execute(() -> {
-            permutations = new boolean[SET_EXPONENTIAL];
-            setPermutationIndicesPlusOne = new int[SET_EXPONENTIAL];
-        });
     }
 
     @Override
@@ -622,7 +568,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
         final Map<Gear, List<Item>> itemsByGear = buildItemsByGear(items);
 
         final Map<String, float[]> accumulatorArrsByItemId = new ConcurrentHashMap<>(new HashMap<>());
-        final ExecutorService executorService = Executors.newFixedThreadPool(2);
+        final ExecutorService executorService = Executors.newFixedThreadPool(GPU_CPU_WORKERS);
         searchedCounter = new AtomicLong(0);
         resultsCounter = new AtomicLong(0);
 
@@ -711,8 +657,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
         if (SETTING_GPU && canUseGpu && maxPerms >= 20_000_000) {
             // GPU Optimize
 
-//            final int max = 2097152;
-            final int max = 1048576;
+            final int max = GPU_CHUNK_SIZE;
 
             kernel = selectKernel(
                     request,
@@ -748,50 +693,65 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                     nSize,
                     rSize,
                     bSize,
-                    max, setSolutionBitMasks
+                    max
             );
 
             try {
 
-                int maxWorkGroupSize = 64;
+                final List<OpenCLPlatform> platforms = OpenCLPlatform.getUncachedOpenCLPlatforms();
+                final OpenCLDevice bestDevice = platforms.stream()
+                        .flatMap(x -> x.getOpenCLDevices().stream())
+                        .filter(x -> x.getDeviceId() == Main.BEST_DEVICE_ID)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException("Configured OpenCL GPU was not found"));
 
-                try {
-                    //                final Device bestDevice = KernelManager.instance().bestDevice();
+                final int kernelMaxWorkGroupSize = kernel.getKernelMaxWorkGroupSize(bestDevice);
+                final int finalMaxWorkGroupSize = findPreviousPowerOf2(Math.min(kernelMaxWorkGroupSize, GPU_WORK_GROUP_SIZE));
 
-                    List<OpenCLPlatform> platforms = OpenCLPlatform.getUncachedOpenCLPlatforms();
-                    final Optional<OpenCLDevice> bestDevice = platforms.stream()
-                            .flatMap(x -> x.getOpenCLDevices().stream())
-                            .filter(x -> x.getDeviceId() == Main.BEST_DEVICE_ID)
-                            .findFirst();
-
-                    System.out.println(bestDevice);
-
-                    final int kernelMaxWorkGroupSize = kernel.getKernelMaxWorkGroupSize(bestDevice.get());
-                    System.out.println("Kernel max work group size: " + kernelMaxWorkGroupSize);
-
-                    maxWorkGroupSize = kernelMaxWorkGroupSize;
-                    System.out.println("Kernel max work group size power of 2: " + maxWorkGroupSize);
-                } catch (final Exception e) {
-                    e.printStackTrace();
-                    System.out.println("Could not find max work group size. Defaulting.");
+                System.out.println("GPU device: " + bestDevice);
+                System.out.println("GPU tuning: chunkSize=" + max
+                        + ", workGroupSize=" + finalMaxWorkGroupSize
+                        + ", cpuWorkers=" + GPU_CPU_WORKERS
+                        + ", explicitBuffers=" + GPU_EXPLICIT_BUFFERS);
+                if (GPU_PROFILE) {
+                    logGpuProfile(
+                            "GPU_CONFIG device=%s chunkSize=%d workGroupSize=%d cpuWorkers=%d explicitBuffers=%s packedResults=true",
+                            bestDevice,
+                            max,
+                            finalMaxWorkGroupSize,
+                            GPU_CPU_WORKERS,
+                            GPU_EXPLICIT_BUFFERS);
                 }
 
-                final int finalMaxWorkGroupSize = maxWorkGroupSize;
-
                 kernel.setExecutionModeWithoutFallback(Kernel.EXECUTION_MODE.GPU);
+                kernel.setExplicit(GPU_EXPLICIT_BUFFERS);
+
+                // The kernel writes one integer for every 32 evaluated permutations.
+                final int maxPassWords = (max + Integer.SIZE - 1) / Integer.SIZE;
+                final int maxGlobalWords = roundUp(maxPassWords, finalMaxWorkGroupSize);
+                final int[] gpuPassBits = new int[maxGlobalWords];
+                kernel.setPassBits(gpuPassBits);
 
                 final AtomicBoolean exit = new AtomicBoolean(false);
                 final AtomicInteger executionCounter = new AtomicInteger(0);
 
-                final Map<String, PassesContainer> passesPool = new HashMap<>();
+                final Map<String, PassesContainer> passesPool = new ConcurrentHashMap<>();
 
-                for (int i = 0; i < maxPerms / max + 1; i++) {
+                final long batchCount = (maxPerms + max - 1) / max;
+                for (int i = 0; i < batchCount; i++) {
                     if (exit.get() || Main.interrupt)
                         break;
 
-                    final int finalI = i;
+                    while (executionCounter.get() >= GPU_CPU_WORKERS && !exit.get() && !Main.interrupt) {
+                        Thread.sleep(1);
+                    }
 
-                    final boolean[] passes;
+                    final int finalI = i;
+                    final long batchStart = ((long) finalI) * max;
+                    final int batchSize = (int) Math.min(max, maxPerms - batchStart);
+                    final int batchPassWords = (batchSize + Integer.SIZE - 1) / Integer.SIZE;
+
+                    final int[] passBits;
                     final String passesId;
                     final Optional<PassesContainer> containerOptional = passesPool.values()
                             .stream()
@@ -799,16 +759,16 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                             .findFirst();
                     if (containerOptional.isPresent()) {
                         final PassesContainer container = containerOptional.get();
-                        passes = container.getPasses();
+                        passBits = container.getPassBits();
                         passesId = container.getId();
                         container.setLocked(true);
                     } else {
                         try {
-                            passes = new boolean[max];
+                            passBits = new int[maxPassWords];
                             passesId = String.valueOf(finalI);
                             passesPool.put(passesId, PassesContainer.builder()
                                     .id(passesId)
-                                    .passes(passes)
+                                    .passBits(passBits)
                                     .locked(true)
                                     .build());
                         } catch (final OutOfMemoryError e) {
@@ -819,44 +779,58 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                         }
                     }
 
-                    List<OpenCLPlatform> platforms = OpenCLPlatform.getUncachedOpenCLPlatforms();
-                    final Optional<OpenCLDevice> bestDevice = platforms.stream()
-                            .flatMap(x -> x.getOpenCLDevices().stream())
-                            .filter(x -> x.getDeviceId() == Main.BEST_DEVICE_ID)
-                            .findFirst();
-
-                    while(executionCounter.get() > 1 && !exit.get() && !Main.interrupt) {
-                        Thread.sleep(10);
-                    }
-
                     executionCounter.incrementAndGet();
 
-                    final Range range = bestDevice.get().createRange(max, finalMaxWorkGroupSize);
+                    final int globalSize = roundUp(batchPassWords, finalMaxWorkGroupSize);
+                    final Range range = bestDevice.createRange(globalSize, finalMaxWorkGroupSize);
                     kernel.setIteration(finalI);
-                    kernel.setPasses(passes);
+                    final long executeStartNanos = System.nanoTime();
                     try {
                         kernel.execute(range);
+                        final long executeEndNanos = System.nanoTime();
+                        if (GPU_EXPLICIT_BUFFERS) {
+                            kernel.get(gpuPassBits);
+                        }
+                        final long readbackEndNanos = System.nanoTime();
+                        System.arraycopy(gpuPassBits, 0, passBits, 0, batchPassWords);
+
+                        if (GPU_PROFILE && (finalI < 3 || finalI % 25 == 0 || finalI == batchCount - 1)) {
+                            logGpuProfile(
+                                    "GPU_PROFILE batch=%d/%d permutations=%d executeMs=%.3f readbackMs=%.3f throughputMps=%.2f",
+                                    finalI + 1,
+                                    batchCount,
+                                    batchSize,
+                                    (executeEndNanos - executeStartNanos) / 1_000_000.0,
+                                    (readbackEndNanos - executeEndNanos) / 1_000_000.0,
+                                    batchSize / ((readbackEndNanos - executeStartNanos) / 1_000_000_000.0) / 1_000_000.0);
+                        }
                     } catch (final Exception e) {
                         System.err.println("GPU error, please try again. " + e);
                         inProgress = false;
+                        executionCounter.decrementAndGet();
                         break;
                     }
 
 
                     executorService.submit(() -> {
                         try {
-                            searchedCounter.addAndGet(Math.min(max, maxPerms));
+                            final long cpuStartNanos = System.nanoTime();
+                            searchedCounter.addAndGet(batchSize);
 
-                            for (int j = 0; j < max; j++) {
-                                final long iteration = ((long) finalI) * max + j;
+                            for (int wordIndex = 0; wordIndex < batchPassWords && !Main.interrupt && !exit.get(); wordIndex++) {
+                                int word = passBits[wordIndex];
+                                while (word != 0) {
+                                    final int lane = Integer.numberOfTrailingZeros(word);
+                                    word &= word - 1;
+                                    final int j = wordIndex * Integer.SIZE + lane;
+                                    if (j >= batchSize) {
+                                        break;
+                                    }
+                                final long iteration = batchStart + j;
 
                                 //                    System.out.println(longSetMasks[0]);
                                 //                    System.out.println(debug[j]);
 
-                                if (passes[j]) {
-                                    if (iteration >= maxPerms) {
-                                        break;
-                                    }
                                     if (Main.interrupt || exit.get()) {
                                         break;
                                     }
@@ -905,10 +879,21 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                                 }
                             }
 
+                            if (GPU_PROFILE && (finalI < 3 || finalI % 25 == 0 || finalI == batchCount - 1)) {
+                                logGpuProfile(
+                                        "CPU_PROFILE batch=%d/%d processMs=%.3f pending=%d",
+                                        finalI + 1,
+                                        batchCount,
+                                        (System.nanoTime() - cpuStartNanos) / 1_000_000.0,
+                                        executionCounter.get() - 1);
+                            }
+
                             passesPool.get(passesId).setLocked(false);
                             executionCounter.decrementAndGet();
                         } catch (final Exception e) {
                             e.printStackTrace();
+                            passesPool.get(passesId).setLocked(false);
+                            executionCounter.decrementAndGet();
                         }
                     });
 
@@ -1144,7 +1129,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
         final int index = calculateSetIndex(indexArray);
         //        System.out.println(Arrays.toString(indexArray));
 
-        return request.boolArr[index];
+        return request.getSetFormat() == 0 || isPermutationBitSet(request.setPermutationBits, index);
     }
 
     public Map<Gear, List<Item>> buildItemsByGear(final List<Item> items) {
@@ -1185,6 +1170,18 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                 + indices[5];
     }
 
+    private static void setPermutationBit(final long[] bits, final int index) {
+        bits[index >>> 6] |= 1L << (index & 63);
+    }
+
+    private static int roundUp(final int value, final int multiple) {
+        return ((value + multiple - 1) / multiple) * multiple;
+    }
+
+    private static boolean isPermutationBitSet(final long[] bits, final int index) {
+        return ((bits[index >>> 6] >>> (index & 63)) & 1L) != 0;
+    }
+
     // https://java2blog.com/permutations-array-java/
     public List<List<Integer>> permute(int[] arr) {
         final List<List<Integer>> list = new ArrayList<>();
@@ -1222,13 +1219,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
     }
 
     public void addCalculatedFields(OptimizationRequest request) {
-//        final boolean[] permutations = new boolean[SET_EXPONENTIAL];
-//        final int[] setPermutationIndicesPlusOne = new int[SET_EXPONENTIAL];
-        Arrays.fill(permutations, false);
-        Arrays.fill(setPermutationIndicesPlusOne, 0);
-//        int[] setSolutionCounters;
-
-//        setSolutionCounters = new int[1];
+        Arrays.fill(setPermutationBits, 0L);
 
         final List<Set> inputSets1 = getSetsOrElseAll(request.getInputSetsOne());
         final List<Set> inputSets2 = getSetsOrElseAll(request.getInputSetsTwo());
@@ -1237,10 +1228,6 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
         final int setFormat = request.getSetFormat();
         if (setFormat == 0) {
             // [0][0][0] All valid
-
-            Arrays.fill(permutations, true);
-//            setSolutionCounters = new int[1];
-            setPermutationIndicesPlusOne[0] = 1;
         } else if (setFormat == 1) {
             // [4][2][0]
 
@@ -1260,8 +1247,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
 //                            setSolutionCounters[i*16 + j] = setSolutionCounter[j];
 //                        }
 //
-                        permutations[index1D] = true;
-                        setPermutationIndicesPlusOne[index1D] = i + 1;
+                        setPermutationBit(setPermutationBits, index1D);
                     }
                     //                    System.out.println(Arrays.toString(indices));
                     //                    System.out.println(set1);
@@ -1294,8 +1280,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
 //                                setSolutionCounters[i*16 + j] = setSolutionCounter[j];
 //                            }
 //
-                            permutations[index1D] = true;
-                            setPermutationIndicesPlusOne[index1D] = i + 1;
+                            setPermutationBit(setPermutationBits, index1D);
                         }
                         //                        System.out.println(Arrays.toString(indicesInstance));
                         //                        System.out.println(set1);
@@ -1331,8 +1316,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
 //                                        setSolutionCounters[i*16 + j] = setSolutionCounter[j];
 //                                    }
 //
-                                    permutations[index1D] = true;
-                                    setPermutationIndicesPlusOne[index1D] = i + 1;
+                                    setPermutationBit(setPermutationBits, index1D);
                                 }
                                 //                                System.out.println(Arrays.toString(indicesInstance));
                                 //                                System.out.println(set1);
@@ -1369,8 +1353,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
 //                                    setSolutionCounters[i*16 + j] = setSolutionCounter[j];
 //                                }
 //
-                                permutations[index1D] = true;
-                                setPermutationIndicesPlusOne[index1D] = i + 1;
+                                setPermutationBit(setPermutationBits, index1D);
                             }
                             //                            System.out.println(Arrays.toString(indicesInstance));
                             //                            System.out.println(set1);
@@ -1401,8 +1384,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
 //                                setSolutionCounters[i*16 + j] = setSolutionCounter[j];
 //                            }
 //
-                            permutations[index1D] = true;
-                            setPermutationIndicesPlusOne[index1D] = i + 1;
+                            setPermutationBit(setPermutationBits, index1D);
                         }
                         //                        System.out.println(Arrays.toString(indices));
                         //                        System.out.println(set1);
@@ -1417,9 +1399,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
             throw new RuntimeException("Invalid Set Format " + request.getSetFormat());
         }
 
-        request.setBoolArr(permutations);
-        request.setSetPermutationIndicesPlusOne(setPermutationIndicesPlusOne);
-//        request.setSetSolutionCounters(setSolutionCounters);
+        request.setSetPermutationBits(setPermutationBits);
 
     }
 
@@ -1457,8 +1437,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
             final long nSize,
             final long rSize,
             final long bSize,
-            final long max,
-            final long[] longSetMasks
+            final long max
     ) {
         if (request.getSetFormat() == 0) {
             return new SetFormat000OptimizerKernel(
@@ -1495,8 +1474,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                     nSize,
                     rSize,
                     bSize,
-                    max,
-                    longSetMasks
+                    max
             );
         }
         return new GpuOptimizerKernel(
@@ -1533,8 +1511,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
                 nSize,
                 rSize,
                 bSize,
-                max,
-                longSetMasks
+                max
         );
     }
 }

@@ -79,7 +79,7 @@ public class HeroDb {
         hero.setOptimizationRequest(request
                 .withHero(null)
                 .withItems(null)
-                .withBoolArr(null));
+                .withSetPermutationBits(null));
     }
 
     public List<HeroStats> getBuildsForHero(final String heroId) {
