@@ -47,6 +47,7 @@ public class OptimizationRequest extends Request {
     private Boolean inputOrderedHeroPriority;
     private Boolean inputKeepCurrentItems;
     private Boolean inputOnlyMaxedGear;
+    private Boolean inputUsePvECritDamageCap;
 
     private int atk;
     private int hp;

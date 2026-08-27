@@ -10,6 +10,9 @@ import static com.fribbels.handler.OptimizationRequestHandler.SET_COUNT;
 
 public class StatCalculator {
 
+    private static final int STANDARD_CRIT_DAMAGE_CAP = 350;
+    private static final int PVE_CRIT_DAMAGE_CAP = 400;
+
     public static boolean SETTING_RAGE_SET = true;
     public static boolean SETTING_PEN_SET = true;
     public static boolean SETTING_FERVOR_SET = true;
@@ -31,9 +34,14 @@ public class StatCalculator {
     private float bonusMaxDef;
 
     private float penSetDmgBonus;
+    private int damageCritDamageCap = STANDARD_CRIT_DAMAGE_CAP;
 
     public StatCalculator() {
 
+    }
+
+    public void setUsePvECritDamageCap(final boolean usePvECritDamageCap) {
+        damageCritDamageCap = usePvECritDamageCap ? PVE_CRIT_DAMAGE_CAP : STANDARD_CRIT_DAMAGE_CAP;
     }
 
     public void setBaseValues(final HeroStats base, final Hero hero) {
@@ -114,14 +122,10 @@ public class StatCalculator {
             critRate = cr / 100f;
         }
 
-        final float critDamage;
-        if (cd > 350) {
-            critDamage = 3.5f;
-        } else {
-            critDamage = cd / 100f;
-        }
+        final float cpCritDamage = Math.min(STANDARD_CRIT_DAMAGE_CAP, cd) / 100f;
+        final float critDamage = Math.min(damageCritDamageCap, cd) / 100f;
 
-        final int cp = (int) (((atk * 1.6f + atk * 1.6f * critRate * critDamage) * (1.0 + (spd - 45f) * 0.02f) + hp + def * 9.3f) * (1f + (res/100f + eff/100f) / 4f));
+        final int cp = (int) (((atk * 1.6f + atk * 1.6f * critRate * cpCritDamage) * (1.0 + (spd - 45f) * 0.02f) + hp + def * 9.3f) * (1f + (res/100f + eff/100f) / 4f));
 
         final float penSetOn = sets[13] > 1 ? 1 : 0;
         final float rageMultiplier = SETTING_RAGE_SET && sets[11] > 3 ? 0.3f : 0;

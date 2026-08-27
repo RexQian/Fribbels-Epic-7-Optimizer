@@ -1165,6 +1165,7 @@ function getDefaultParams() {
         inputRingStat: [],
         inputBootsStat: [],
         inputPredictReforges: true,
+        inputUsePvECritDamageCap: false,
         inputAllowEquippedItems: true,
         inputAllowLockedItems: true,
         inputOrderedHeroPriority: true,

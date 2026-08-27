@@ -47,6 +47,7 @@ public class GpuOptimizerKernel extends Kernel {
     @Constant final int SETTING_RAGE_SET;
     @Constant final int SETTING_PEN_SET;
     @Constant final int SETTING_FERVOR_SET;
+    @Constant final int damageCritDamageCap;
 
     @Constant final float baseAtk;
     @Constant final float baseHp;
@@ -343,6 +344,7 @@ public class GpuOptimizerKernel extends Kernel {
         this.SETTING_RAGE_SET = SETTING_RAGE_SET;
         this.SETTING_PEN_SET = SETTING_PEN_SET;
         this.SETTING_FERVOR_SET = SETTING_FERVOR_SET;
+        this.damageCritDamageCap = Boolean.TRUE.equals(request.getInputUsePvECritDamageCap()) ? 400 : 350;
 
         this.baseAtk = base.atk;
         this.baseHp = base.hp;
@@ -778,9 +780,10 @@ public class GpuOptimizerKernel extends Kernel {
                     final int spd =    (int) (baseSpeed + wSpeed+hSpeed+aSpeed+nSpeed+rSpeed+bSpeed + (speedSet * speedSetBonus) + (revengeSet * revengeSetBonus) + (reversalSet * reversalSetBonus) + (weakeningSet * reversalSetBonus) + bonusSpeed + aeiSpeed);
 
                     final float critRate = min(100, cr) / 100f;
-                    final float critDamage = min(350, cd) / 100f;
+                    final float cpCritDamage = min(350, cd) / 100f;
+                    final float critDamage = min(damageCritDamageCap, cd) / 100f;
 
-                    final int cp = (int) (((atk * 1.6f + atk * 1.6f * critRate * critDamage) * (1.0 + (spd - 45f) * 0.02f) + hp + def * 9.3f) * (1f + (res/100f + eff/100f) / 4f));
+                    final int cp = (int) (((atk * 1.6f + atk * 1.6f * critRate * cpCritDamage) * (1.0 + (spd - 45f) * 0.02f) + hp + def * 9.3f) * (1f + (res/100f + eff/100f) / 4f));
 
                     final float penSetOn = min(penSet, 1);
                     final float fervorSetOn = min(fervorSet, 1);

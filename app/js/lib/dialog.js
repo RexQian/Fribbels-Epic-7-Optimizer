@@ -656,6 +656,11 @@ module.exports = {
                                 <label for="inputSubstatMods${index}" data-t>${i18next.t("Use substat mods")}</label>
                               </div>
 
+                              <div>
+                                <input type="checkbox" id="inputUsePvECritDamageCap${index}" class="optimizer-checkbox">
+                                <label for="inputUsePvECritDamageCap${index}" data-t>${i18next.t("PVE 400% Crit Damage Cap")}</label>
+                              </div>
+
                               <div style="display:none">
                                 <input type="checkbox" id="inputOnlyMaxedGear${index}" class="optimizer-checkbox">
                                 <label for="inputOnlyMaxedGear${index}" data-t>${i18next.t("Only maxed gear")}</label>

@@ -522,6 +522,7 @@ public class OptimizationRequestHandler extends RequestHandler implements HttpHa
     public String optimize(final OptimizationRequest request, final HeroStats unused) {
         long startTime = System.currentTimeMillis();
         final StatCalculator statCalculator = new StatCalculator();
+        statCalculator.setUsePvECritDamageCap(Boolean.TRUE.equals(request.getInputUsePvECritDamageCap()));
         final OptimizationDb optimizationDb = optimizationDbs.get(request.getExecutionId());
         if (optimizationDb == null) {
             return "";

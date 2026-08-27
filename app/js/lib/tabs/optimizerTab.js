@@ -491,6 +491,7 @@ module.exports = {
         request.inputOrderedHeroPriority   = readCheckbox('inputOrderedHeroPriority' + index);
         request.inputKeepCurrentItems   = readCheckbox('inputKeepCurrentItems' + index);
         request.inputOnlyMaxedGear   = readCheckbox('inputOnlyMaxedGear' + index);
+        request.inputUsePvECritDamageCap = readCheckbox('inputUsePvECritDamageCap' + index);
         request.inputPredictReforges   = request.inputSubstatMods || readCheckbox('inputPredictReforges' + index);
         // request.inputOver85   = readCheckbox('inputOver85');
         // request.inputOnlyPlus15Gear   = readCheckbox('inputOnlyPlus15Gear');
@@ -632,6 +633,7 @@ module.exports = {
             $("#inputAllowEquippedItems" + index).prop('checked', optimizerSettings.settingDefaultEquippedItems);
             $("#inputOrderedHeroPriority" + index).prop('checked', optimizerSettings.settingDefaultUseHeroPriority);
             $("#inputKeepCurrentItems" + index).prop('checked', optimizerSettings.settingDefaultKeepCurrent);
+            $("#inputUsePvECritDamageCap" + index).prop('checked', false);
             return;
         }
 
@@ -702,6 +704,7 @@ module.exports = {
         $("#inputAllowEquippedItems" + index).prop('checked',  isNullUndefined(request.inputAllowEquippedItems)  ? optimizerSettings.settingDefaultEquippedItems    : request.inputAllowEquippedItems);
         $("#inputKeepCurrentItems" + index).prop('checked',    isNullUndefined(request.inputKeepCurrentItems)    ? optimizerSettings.settingDefaultKeepCurrent      : request.inputKeepCurrentItems);
         $("#inputOrderedHeroPriority" + index).prop('checked', isNullUndefined(request.inputOrderedHeroPriority) ? optimizerSettings.settingDefaultUseHeroPriority  : request.inputOrderedHeroPriority);
+        $("#inputUsePvECritDamageCap" + index).prop('checked', request.inputUsePvECritDamageCap === true);
 
         document.querySelector('#atkSlider' + index)['rangeslider-js'].update({value: inputDisplayNumberNumber(request.inputAtkPriority)})
         document.querySelector('#atkSlider' + index + 'Input').setAttribute('value', inputDisplayNumberNumber(request.inputAtkPriority))
