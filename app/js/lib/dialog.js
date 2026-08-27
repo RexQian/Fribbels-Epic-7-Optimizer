@@ -658,7 +658,7 @@ module.exports = {
 
                               <div>
                                 <input type="checkbox" id="inputUsePvECritDamageCap${index}" class="optimizer-checkbox">
-                                <label for="inputUsePvECritDamageCap${index}" data-t>${i18next.t("PVE 400% Crit Damage Cap")}</label>
+                                <label for="inputUsePvECritDamageCap${index}" data-t>${i18next.t("400% CDmg cap")}</label>
                               </div>
 
                               <div style="display:none">

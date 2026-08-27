@@ -466,7 +466,7 @@
     "Optimizer": "配装器",
     "Optionally, if you want to load your storage items, open the storage menu after loading in the lobby": "可选, 如果你想把装备保存室的装备也导入进来, 请在进入大厅后打开装备保存室",
     "Options": "选项",
-    "PVE 400% Crit Damage Cap": "PVE 400% 爆伤上限",
+    "400% CDmg cap": "400% 爆伤上限",
     "OR": "或",
     "Other": "其它",
     "Over 5 billion permutations selected. For faster results, try applying stricter filters or using a lower Top N%.": "已选择超过五十亿组组合。为求快速得到结果，尝试使用更严格的筛选条件，或使用较低的Top%数值。",

@@ -952,6 +952,7 @@ function clearOptions() {
     $("#inputAllowEquippedItems").prop('checked', optimizerSettings.settingDefaultEquippedItems);
     $("#inputOrderedHeroPriority").prop('checked', optimizerSettings.settingDefaultUseHeroPriority);
     $("#inputKeepCurrentItems").prop('checked', optimizerSettings.settingDefaultKeepCurrent);
+    $("#inputUsePvECritDamageCap").prop('checked', false);
 }
 
 async function editGearFromIcon(id, reforge, checkboxPrefix) {
@@ -1441,9 +1442,12 @@ function readNumber(id) {
 }
 
 function readCheckbox(id) {
-    var boolean = document.getElementById(id).checked;
+    const checkbox = document.getElementById(id);
+    if (!checkbox) {
+        return false;
+    }
 
-    return boolean === true ? true : false;
+    return checkbox.checked === true;
 }
 
 function getSetFormat(sets, showError) {
