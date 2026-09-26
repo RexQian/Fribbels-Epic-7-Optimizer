@@ -73,7 +73,7 @@ function UrlExists(url, cb){
 }
 
 try {
-    UrlExists('http://e7-optimizer-game-data.s3-accelerate.amazonaws.com/herodata.json?', function(status) {
+    if (process.env.E7_ONLINE_DATA === '1') UrlExists('http://e7-optimizer-game-data.s3-accelerate.amazonaws.com/herodata.json?', function(status) {
         if(status === 200) {
            // file was found
            console.log('Amazon is available, using aws');
@@ -94,7 +94,7 @@ module.exports = {
 
     initialize: async () => {
         // Check if using local cache
-        const useLocalCache = Settings && Settings.getUseLocalCache ? Settings.getUseLocalCache() : false;
+        const useLocalCache = process.env.E7_ONLINE_DATA !== '1' || (Settings && Settings.getUseLocalCache && Settings.getUseLocalCache());
         
         try {
             var heroesByNameStr = await Files.readFileSync(Files.getDataPath() + '/cache/herodata.json');
@@ -247,7 +247,7 @@ module.exports = {
         }
         
         // If using local cache, ensure image URLs are local paths
-        const useLocalCache = Settings && Settings.getUseLocalCache ? Settings.getUseLocalCache() : false;
+        const useLocalCache = process.env.E7_ONLINE_DATA !== '1' || (Settings && Settings.getUseLocalCache && Settings.getUseLocalCache());
         if (useLocalCache) {
             return convertHeroImageUrls(heroInfo);
         }
