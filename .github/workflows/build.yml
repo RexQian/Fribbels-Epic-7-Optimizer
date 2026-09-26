@@ -58,12 +58,14 @@ jobs:
         run: yarn install --frozen-lockfile
       - name: Verify offline hero, artifact and image loading with network denied
         run: node scripts/verify-optimizer-offline.cjs .
-      - name: Patch legacy dmg-builder for Python 3
+      - name: Configure locked dmg-builder for Python 3
         if: matrix.platform == 'macos'
         shell: bash
         run: |
-          sed -i '' 's/reload(sys)/import importlib; importlib.reload(sys)/g' node_modules/dmg-builder/vendor/dmgbuild/core.py
-          sed -i '' "s/sys.setdefaultencoding('UTF8')/pass/g" node_modules/dmg-builder/vendor/dmgbuild/core.py
+          dmg_python="$(command -v python3)"
+          test -n "$dmg_python" && test -x "$dmg_python"
+          "$dmg_python" scripts/patch-dmg-python3.py node_modules/dmg-builder
+          printf 'PYTHON_PATH=%s\n' "$dmg_python" >> "$GITHUB_ENV"
       - name: Build renderer and main
         run: yarn build
       - name: Package macOS without publishing
