@@ -58,21 +58,19 @@ jobs:
         run: yarn install --frozen-lockfile
       - name: Verify offline hero, artifact and image loading with network denied
         run: node scripts/verify-optimizer-offline.cjs .
-      - name: Configure locked dmg-builder for Python 3
-        if: matrix.platform == 'macos'
-        shell: bash
-        run: |
-          dmg_python="$(command -v python3)"
-          test -n "$dmg_python" && test -x "$dmg_python"
-          "$dmg_python" scripts/patch-dmg-python3.py node_modules/dmg-builder
-          printf 'PYTHON_PATH=%s\n' "$dmg_python" >> "$GITHUB_ENV"
       - name: Build renderer and main
         run: yarn build
       - name: Package macOS without publishing
         if: matrix.platform == 'macos'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder build --mac --publish never
+          BUILD_NUMBER: ''
+          TRAVIS_BUILD_NUMBER: ''
+          APPVEYOR_BUILD_NUMBER: ''
+          CIRCLE_BUILD_NUM: ''
+          BUILD_BUILDNUMBER: ''
+          CI_PIPELINE_IID: ''
+        run: npx electron-builder build --mac zip --x64 --arm64 --publish never
       - name: Package Windows without publishing
         if: matrix.platform == 'windows'
         run: npx electron-builder build --win --x64 --publish never
@@ -80,6 +78,7 @@ jobs:
         shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: python3 scripts/offline-draft.py verify-package release
       - name: Record build provenance
         shell: bash
@@ -93,8 +92,6 @@ jobs:
         with:
           name: offline-${{ matrix.platform }}
           path: |
-            release/*.dmg
-            release/*.pkg
             release/*.exe
             release/*.zip
             release/build-${{ matrix.platform }}.json

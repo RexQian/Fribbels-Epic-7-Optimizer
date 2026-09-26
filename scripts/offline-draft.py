@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import plistlib
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -35,26 +37,87 @@ def _verify_offline_data(data_root: Path) -> None:
     command("node", "scripts/verify-optimizer-offline.cjs", ".", str(data_root))
 
 
+def mac_zip_arch(name: str, version: str) -> str | None:
+    match = re.fullmatch(rf"FribbelsE7Optimizer-{re.escape(version)}-(arm64-)?mac\.zip", name)
+    return ("arm64" if match.group(1) else "x64") if match else None
+
+
+def _mac_zip_packages(root: Path, version: str) -> dict[str, Path]:
+    packages: dict[str, Path] = {}
+    for path in root.iterdir():
+        if not path.is_file() or path.suffix.lower() != ".zip":
+            continue
+        arch = mac_zip_arch(path.name, version)
+        if arch is None or arch in packages:
+            raise RuntimeError(f"Unexpected macOS ZIP: {path.name}")
+        packages[arch] = path
+    if set(packages) != {"x64", "arm64"}:
+        raise RuntimeError("Both x64 and arm64 macOS ZIP packages are required")
+    return packages
+
+
+def _verify_mac_zip(package: Path, version: str, arch: str) -> None:
+    with zipfile.ZipFile(package) as archive:
+        members = archive.infolist()
+        names = [item.filename for item in members]
+        if len(names) != len(set(names)):
+            raise RuntimeError("Duplicate ZIP member")
+        for item in members:
+            path = Path(item.filename)
+            if item.filename.startswith("/") or "\\" in item.filename or ".." in path.parts:
+                raise RuntimeError("Unsafe macOS ZIP path")
+            if "/Contents/data/" in item.filename and (item.external_attr >> 16) & 0o170000 == 0o120000:
+                raise RuntimeError("Symlink in macOS ZIP")
+        infos = [name for name in names if re.fullmatch(r"[^/]+\.app/Contents/Info\.plist", name)]
+        if len(infos) != 1:
+            raise RuntimeError("ZIP must contain one root .app/Contents/Info.plist")
+        prefix = infos[0][:-len("Info.plist")]
+        info = plistlib.loads(archive.read(infos[0]))
+        if info.get("CFBundleShortVersionString") != version or info.get("CFBundleVersion") != version:
+            raise RuntimeError("Packaged macOS app version differs from frozen version")
+        executable = info.get("CFBundleExecutable")
+        if not isinstance(executable, str) or not re.fullmatch(r"[A-Za-z0-9_. -]+", executable):
+            raise RuntimeError("Packaged macOS executable is invalid")
+        binary = prefix + "MacOS/" + executable
+        if binary not in names:
+            raise RuntimeError("Packaged macOS executable is missing")
+        with archive.open(binary) as stream:
+            header = stream.read(8)
+        if len(header) != 8:
+            raise RuntimeError("Packaged macOS executable is truncated")
+        magic = header[:4]
+        if magic == b"\xcf\xfa\xed\xfe":
+            cpu = struct.unpack("<I", header[4:8])[0]
+        elif magic == b"\xfe\xed\xfa\xcf":
+            cpu = struct.unpack(">I", header[4:8])[0]
+        else:
+            raise RuntimeError("Packaged executable is not a thin Mach-O binary")
+        expected_cpu = {"x64": 0x01000007, "arm64": 0x0100000c}[arch]
+        if cpu != expected_cpu:
+            raise RuntimeError(f"macOS ZIP architecture differs: {package.name}")
+        data_prefix = prefix + "data/"
+        with tempfile.TemporaryDirectory(prefix="e7-offline-mac-zip-") as directory:
+            data_root = Path(directory) / "data"
+            for item in members:
+                if not item.filename.startswith(data_prefix) or item.is_dir():
+                    continue
+                relative = Path(item.filename[len(data_prefix):])
+                if not relative.parts or relative.is_absolute() or ".." in relative.parts:
+                    raise RuntimeError("Unsafe packaged data path")
+                target = data_root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(item) as source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+            _verify_offline_data(data_root)
+
+
 def verify_packaged_cache(root: Path) -> None:
     """Run the real offline loader against data extracted from built packages."""
     platform = os.environ["PLATFORM"]
     if platform == "macos":
-        packages = sorted(root.glob("*.dmg"))
-        if not packages:
-            raise RuntimeError("No macOS disk image to inspect")
-        for package in packages:
-            with tempfile.TemporaryDirectory(prefix="e7-offline-dmg-") as directory:
-                mount = Path(directory) / "mounted"
-                mount.mkdir()
-                command("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint",
-                        str(mount), str(package))
-                try:
-                    roots = list(mount.glob("*.app/Contents/data"))
-                    if len(roots) != 1:
-                        raise RuntimeError(f"Disk image has no unique packaged data root: {package.name}")
-                    _verify_offline_data(roots[0])
-                finally:
-                    command("hdiutil", "detach", str(mount))
+        version = os.environ["RELEASE_TAG"].removeprefix("v")
+        for arch, package in _mac_zip_packages(root, version).items():
+            _verify_mac_zip(package, version, arch)
     elif platform == "windows":
         packages = sorted(root.glob("*.zip"))
         if not packages:
@@ -85,8 +148,10 @@ def verify_packaged_cache(root: Path) -> None:
 
 def provenance(root: Path, platform: str, tag: str, run_id: str, attempt: str,
                commit: str) -> dict:
-    extensions = (".dmg", ".pkg") if platform == "macos" else (".exe",)
-    files = sorted(path for path in root.iterdir() if path.is_file() and path.suffix.lower() in extensions)
+    if platform == "macos":
+        files = list(_mac_zip_packages(root, tag.removeprefix("v")).values())
+    else:
+        files = sorted(path for path in root.iterdir() if path.is_file() and path.suffix.lower() == ".exe")
     if not files:
         raise RuntimeError(f"Missing {platform} installation package")
     return {"schema_version": 1, "platform": platform, "tag": tag,
@@ -114,6 +179,7 @@ def verify(root: Path) -> list[Path]:
         raise RuntimeError("Build commit differs from the reviewed candidate")
     files: list[Path] = []
     names: set[str] = set()
+    mac_arches: set[str] = set()
     for platform in ("macos", "windows"):
         meta_path = root / f"build-{platform}.json"
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -128,9 +194,12 @@ def verify(root: Path) -> list[Path]:
             name = item.get("name") if isinstance(item, dict) else None
             if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", name) or name in names:
                 raise RuntimeError("Duplicate or unsafe build artifact name")
-            if (platform == "macos" and not name.lower().endswith((".dmg", ".pkg"))) or (
-                platform == "windows" and not name.lower().endswith(".exe")
-            ):
+            if platform == "macos":
+                arch = mac_zip_arch(name, tag.removeprefix("v"))
+                if arch is None or arch in mac_arches:
+                    raise RuntimeError("Build artifact platform mismatch")
+                mac_arches.add(arch)
+            elif not name.lower().endswith(".exe"):
                 raise RuntimeError("Build artifact platform mismatch")
             path = root / name
             if not path.is_file() or path.stat().st_size != item.get("size") or digest(path) != item.get("sha256"):
@@ -138,6 +207,8 @@ def verify(root: Path) -> list[Path]:
             names.add(name)
             files.append(path)
         files.append(meta_path)
+    if mac_arches != {"x64", "arm64"}:
+        raise RuntimeError("Draft is missing an x64 or arm64 macOS ZIP")
     return files
 
 
