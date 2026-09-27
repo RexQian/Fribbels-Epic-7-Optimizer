@@ -98,6 +98,24 @@ def _verify_mac_cpu(header: bytes, arch: str, name: str) -> None:
         raise RuntimeError(f"macOS package architecture differs: {name}")
 
 
+def _mounted_dmg_device(entries: list[dict], mounted: Path) -> str:
+    devices = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        mount_point, device = entry.get("mount-point"), entry.get("dev-entry")
+        if not isinstance(mount_point, str) or not isinstance(device, str):
+            continue
+        try:
+            if Path(mount_point).samefile(mounted):
+                devices.append(device)
+        except OSError:
+            continue
+    if len(devices) != 1:
+        raise RuntimeError("DMG mounted without a unique device")
+    return devices[0]
+
+
 def _verify_mac_dmg(package: Path, version: str, arch: str) -> None:
     directory = Path(tempfile.mkdtemp(prefix="e7-offline-mac-dmg-"))
     mounted = directory / "mounted"
@@ -112,11 +130,7 @@ def _verify_mac_dmg(package: Path, version: str, arch: str) -> None:
     failure: BaseException | None = None
     try:
         entries = plistlib.loads(attached.stdout).get("system-entities", [])
-        devices = [entry["dev-entry"] for entry in entries if entry.get("mount-point") == str(mounted)
-                   and isinstance(entry.get("dev-entry"), str)]
-        if len(devices) != 1:
-            raise RuntimeError("DMG mounted without a unique device")
-        device = devices[0]
+        device = _mounted_dmg_device(entries, mounted)
         apps = [path for path in mounted.iterdir() if path.is_dir() and path.suffix == ".app"]
         if len(apps) != 1:
             raise RuntimeError("DMG must contain one root .app")
