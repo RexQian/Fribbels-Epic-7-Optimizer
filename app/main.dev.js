@@ -101,7 +101,7 @@ export default class AppUpdater {
     log.transports.file.level = 'info';
     autoUpdater.logger = log;
     autoUpdater.allowDowngrade = true;
-    if (process.env.E7_ENABLE_ONLINE_UPDATES === '1') autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.checkForUpdatesAndNotify();
   }
 }
 
@@ -215,7 +215,7 @@ const createWindow = async () => {
   });
 
   mainWindow.once("ready-to-show", () => {
-    if (process.env.E7_ENABLE_ONLINE_UPDATES === '1') autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.checkForUpdatesAndNotify();
   });
 
 
@@ -225,9 +225,9 @@ const createWindow = async () => {
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
 
-  if (process.env.E7_ENABLE_ONLINE_UPDATES === '1') new AppUpdater();
+  new AppUpdater();
 
-  if (process.env.E7_ENABLE_ONLINE_UPDATES === '1') require('update-electron-app')({
+  require('update-electron-app')({
     repo: 'fribbels/Fribbels-Epic-7-Optimizer',
     updateInterval: '5 minutes',
     // logger: require('electron-log')

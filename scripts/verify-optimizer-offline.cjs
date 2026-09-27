@@ -8,15 +8,13 @@ const dataRoot = path.resolve(process.argv[3] || path.join(candidate, 'data'));
 if (!fs.existsSync(path.join(candidate, 'app/js/lib/heroData.js'))) {
   throw new Error('Candidate path is missing');
 }
-delete process.env.E7_ONLINE_DATA;
-delete process.env.E7_ENABLE_ONLINE_UPDATES;
 let networkCalls = 0;
 const denied = () => { networkCalls += 1; throw new Error('Network access is denied for offline verification'); };
 global.fetch = denied;
 global.jQuery = { ajax: denied };
 global.Headers = class { constructor() { denied(); } };
 global.XMLHttpRequest = class { constructor() { denied(); } };
-global.Settings = { getUseLocalCache: () => false };
+global.Settings = { getUseLocalCache: () => true };
 global.Files = {
   getDataPath: () => dataRoot,
   readFileSync: (filename) => fs.readFileSync(filename, 'utf8'),
