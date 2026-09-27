@@ -12,6 +12,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -42,6 +43,11 @@ def mac_zip_arch(name: str, version: str) -> str | None:
     return ("arm64" if match.group(1) else "x64") if match else None
 
 
+def mac_dmg_arch(name: str, version: str) -> str | None:
+    match = re.fullmatch(rf"FribbelsE7Optimizer-{re.escape(version)}(-arm64)?\.dmg", name)
+    return ("arm64" if match.group(1) else "x64") if match else None
+
+
 def _mac_zip_packages(root: Path, version: str) -> dict[str, Path]:
     packages: dict[str, Path] = {}
     for path in root.iterdir():
@@ -54,6 +60,94 @@ def _mac_zip_packages(root: Path, version: str) -> dict[str, Path]:
     if set(packages) != {"x64", "arm64"}:
         raise RuntimeError("Both x64 and arm64 macOS ZIP packages are required")
     return packages
+
+
+def _mac_dmg_packages(root: Path, version: str) -> dict[str, Path]:
+    packages: dict[str, Path] = {}
+    for path in root.iterdir():
+        if not path.is_file() or path.suffix.lower() != ".dmg":
+            continue
+        arch = mac_dmg_arch(path.name, version)
+        if arch is None or arch in packages:
+            raise RuntimeError(f"Unexpected macOS DMG: {path.name}")
+        packages[arch] = path
+    if set(packages) != {"x64", "arm64"}:
+        raise RuntimeError("Both x64 and arm64 macOS DMG packages are required")
+    return packages
+
+
+def _verify_mac_info(info: dict, version: str) -> str:
+    if info.get("CFBundleShortVersionString") != version or info.get("CFBundleVersion") != version:
+        raise RuntimeError("Packaged macOS app version differs from frozen version")
+    executable = info.get("CFBundleExecutable")
+    if not isinstance(executable, str) or not re.fullmatch(r"[A-Za-z0-9_. -]+", executable):
+        raise RuntimeError("Packaged macOS executable is invalid")
+    return executable
+
+
+def _verify_mac_cpu(header: bytes, arch: str, name: str) -> None:
+    if len(header) != 8:
+        raise RuntimeError("Packaged macOS executable is truncated")
+    if header[:4] == b"\xcf\xfa\xed\xfe":
+        cpu = struct.unpack("<I", header[4:8])[0]
+    elif header[:4] == b"\xfe\xed\xfa\xcf":
+        cpu = struct.unpack(">I", header[4:8])[0]
+    else:
+        raise RuntimeError("Packaged executable is not a thin Mach-O binary")
+    if cpu != {"x64": 0x01000007, "arm64": 0x0100000c}[arch]:
+        raise RuntimeError(f"macOS package architecture differs: {name}")
+
+
+def _verify_mac_dmg(package: Path, version: str, arch: str) -> None:
+    directory = Path(tempfile.mkdtemp(prefix="e7-offline-mac-dmg-"))
+    mounted = directory / "mounted"
+    mounted.mkdir()
+    attached = subprocess.run(
+        ["hdiutil", "attach", "-readonly", "-nobrowse", "-plist", "-mountpoint", str(mounted), str(package)],
+        capture_output=True, check=False, timeout=120)
+    if attached.returncode:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise RuntimeError(f"Cannot mount macOS DMG read-only: {package.name}: {attached.stderr[-500:]!r}")
+    device = str(mounted)
+    failure: BaseException | None = None
+    try:
+        entries = plistlib.loads(attached.stdout).get("system-entities", [])
+        devices = [entry["dev-entry"] for entry in entries if entry.get("mount-point") == str(mounted)
+                   and isinstance(entry.get("dev-entry"), str)]
+        if len(devices) != 1:
+            raise RuntimeError("DMG mounted without a unique device")
+        device = devices[0]
+        apps = [path for path in mounted.iterdir() if path.is_dir() and path.suffix == ".app"]
+        if len(apps) != 1:
+            raise RuntimeError("DMG must contain one root .app")
+        contents = apps[0] / "Contents"
+        executable = _verify_mac_info(plistlib.loads((contents / "Info.plist").read_bytes()), version)
+        with (contents / "MacOS" / executable).open("rb") as stream:
+            _verify_mac_cpu(stream.read(8), arch, package.name)
+        _verify_offline_data(contents / "data")
+    except BaseException as exc:
+        failure = exc
+        raise
+    finally:
+        detach_error = ""
+        for attempt in range(3):
+            args = ["hdiutil", "detach", device] if attempt < 2 else ["hdiutil", "detach", "-force", device]
+            try:
+                detached = subprocess.run(args, capture_output=True, check=False, timeout=30)
+                if detached.returncode == 0:
+                    shutil.rmtree(directory, ignore_errors=True)
+                    break
+                detach_error = repr(detached.stderr[-500:])
+            except subprocess.TimeoutExpired:
+                detach_error = "timed out"
+            if attempt < 2:
+                time.sleep(2)
+        else:
+            message = f"Cannot detach DMG device {device} ({detach_error}); mount retained at {mounted}"
+            if failure is not None:
+                failure.args = (*failure.args, message)
+            else:
+                raise RuntimeError(message)
 
 
 def _verify_mac_zip(package: Path, version: str, arch: str) -> None:
@@ -73,28 +167,13 @@ def _verify_mac_zip(package: Path, version: str, arch: str) -> None:
             raise RuntimeError("ZIP must contain one root .app/Contents/Info.plist")
         prefix = infos[0][:-len("Info.plist")]
         info = plistlib.loads(archive.read(infos[0]))
-        if info.get("CFBundleShortVersionString") != version or info.get("CFBundleVersion") != version:
-            raise RuntimeError("Packaged macOS app version differs from frozen version")
-        executable = info.get("CFBundleExecutable")
-        if not isinstance(executable, str) or not re.fullmatch(r"[A-Za-z0-9_. -]+", executable):
-            raise RuntimeError("Packaged macOS executable is invalid")
+        executable = _verify_mac_info(info, version)
         binary = prefix + "MacOS/" + executable
         if binary not in names:
             raise RuntimeError("Packaged macOS executable is missing")
         with archive.open(binary) as stream:
             header = stream.read(8)
-        if len(header) != 8:
-            raise RuntimeError("Packaged macOS executable is truncated")
-        magic = header[:4]
-        if magic == b"\xcf\xfa\xed\xfe":
-            cpu = struct.unpack("<I", header[4:8])[0]
-        elif magic == b"\xfe\xed\xfa\xcf":
-            cpu = struct.unpack(">I", header[4:8])[0]
-        else:
-            raise RuntimeError("Packaged executable is not a thin Mach-O binary")
-        expected_cpu = {"x64": 0x01000007, "arm64": 0x0100000c}[arch]
-        if cpu != expected_cpu:
-            raise RuntimeError(f"macOS ZIP architecture differs: {package.name}")
+        _verify_mac_cpu(header, arch, package.name)
         data_prefix = prefix + "data/"
         with tempfile.TemporaryDirectory(prefix="e7-offline-mac-zip-") as directory:
             data_root = Path(directory) / "data"
@@ -118,6 +197,8 @@ def verify_packaged_cache(root: Path) -> None:
         version = os.environ["RELEASE_TAG"].removeprefix("v")
         for arch, package in _mac_zip_packages(root, version).items():
             _verify_mac_zip(package, version, arch)
+        for arch, package in _mac_dmg_packages(root, version).items():
+            _verify_mac_dmg(package, version, arch)
     elif platform == "windows":
         packages = sorted(root.glob("*.zip"))
         if not packages:
@@ -149,7 +230,8 @@ def verify_packaged_cache(root: Path) -> None:
 def provenance(root: Path, platform: str, tag: str, run_id: str, attempt: str,
                commit: str) -> dict:
     if platform == "macos":
-        files = list(_mac_zip_packages(root, tag.removeprefix("v")).values())
+        version = tag.removeprefix("v")
+        files = list(_mac_zip_packages(root, version).values()) + list(_mac_dmg_packages(root, version).values())
     else:
         files = sorted(path for path in root.iterdir() if path.is_file() and path.suffix.lower() == ".exe")
     if not files:
@@ -179,7 +261,7 @@ def verify(root: Path) -> list[Path]:
         raise RuntimeError("Build commit differs from the reviewed candidate")
     files: list[Path] = []
     names: set[str] = set()
-    mac_arches: set[str] = set()
+    mac_arches: dict[str, set[str]] = {"zip": set(), "dmg": set()}
     for platform in ("macos", "windows"):
         meta_path = root / f"build-{platform}.json"
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -195,10 +277,11 @@ def verify(root: Path) -> list[Path]:
             if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", name) or name in names:
                 raise RuntimeError("Duplicate or unsafe build artifact name")
             if platform == "macos":
-                arch = mac_zip_arch(name, tag.removeprefix("v"))
-                if arch is None or arch in mac_arches:
+                kind = "zip" if name.endswith(".zip") else "dmg"
+                arch = (mac_zip_arch if kind == "zip" else mac_dmg_arch)(name, tag.removeprefix("v"))
+                if arch is None or arch in mac_arches[kind]:
                     raise RuntimeError("Build artifact platform mismatch")
-                mac_arches.add(arch)
+                mac_arches[kind].add(arch)
             elif not name.lower().endswith(".exe"):
                 raise RuntimeError("Build artifact platform mismatch")
             path = root / name
@@ -207,8 +290,8 @@ def verify(root: Path) -> list[Path]:
             names.add(name)
             files.append(path)
         files.append(meta_path)
-    if mac_arches != {"x64", "arm64"}:
-        raise RuntimeError("Draft is missing an x64 or arm64 macOS ZIP")
+    if any(arches != {"x64", "arm64"} for arches in mac_arches.values()):
+        raise RuntimeError("Draft is missing an x64 or arm64 macOS ZIP or DMG")
     return files
 
 

@@ -11,6 +11,11 @@ on:
         description: Exact reviewed candidate commit SHA
         required: true
         type: string
+      build_only:
+        description: Build and verify artifacts without creating a tag or draft
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -21,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15-intel
+          - os: macos-latest
             platform: macos
           - os: windows-2025
             platform: windows
@@ -60,9 +65,13 @@ jobs:
         run: node scripts/verify-optimizer-offline.cjs .
       - name: Build renderer and main
         run: yarn build
+      - name: Patch locked dmg-builder for Python 3
+        if: matrix.platform == 'macos'
+        run: python3 scripts/patch-dmg-python3.py node_modules/dmg-builder
       - name: Package macOS without publishing
         if: matrix.platform == 'macos'
         env:
+          PYTHON_PATH: /usr/bin/python3
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           BUILD_NUMBER: ''
           TRAVIS_BUILD_NUMBER: ''
@@ -70,7 +79,7 @@ jobs:
           CIRCLE_BUILD_NUM: ''
           BUILD_BUILDNUMBER: ''
           CI_PIPELINE_IID: ''
-        run: npx electron-builder build --mac zip --x64 --arm64 --publish never
+        run: npx electron-builder build --mac --x64 --arm64 --publish never
       - name: Package Windows without publishing
         if: matrix.platform == 'windows'
         run: npx electron-builder build --win --x64 --publish never
@@ -94,12 +103,14 @@ jobs:
           path: |
             release/*.exe
             release/*.zip
+            release/*.dmg
             release/build-${{ matrix.platform }}.json
           if-no-files-found: error
           retention-days: 14
 
   draft:
     needs: build
+    if: inputs.build_only != true
     runs-on: ubuntu-24.04
     permissions:
       contents: write
