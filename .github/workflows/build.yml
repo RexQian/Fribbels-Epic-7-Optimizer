@@ -1,92 +1,141 @@
-name: Build and Release
+name: Build offline draft release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
+    inputs:
+      tag:
+        description: Reserved reviewed vX.Y.Z-offline tag
+        required: true
+        type: string
+      candidate_commit:
+        description: Exact reviewed candidate commit SHA
+        required: true
+        type: string
+      build_only:
+        description: Build and verify artifacts without creating a tag or draft
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
-
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-2025
+            platform: windows
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.candidate_commit }}
+          persist-credentials: false
+      - name: Verify candidate and frozen version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+        run: |
+          test "$CANDIDATE_COMMIT" = "$(git rev-parse HEAD)"
+          node -e 'const tag=process.env.RELEASE_TAG; const root=require("./package.json").version; const app=require("./app/package.json").version; if (tag!==`v${root}` || root!==app || !/^[0-9]+\.[0-9]+\.[0-9]+-offline(?:\.[0-9A-Za-z.-]+)?$/.test(root)) process.exit(1);'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
           java-version: '8'
-          distribution: 'zulu'
           cache: maven
-
-      - name: Build Backend (Maven)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: yarn
+      - name: Build backend
+        shell: bash
         run: |
           cd backend
           mvn package
           cp target/backend-1.0.jar ../data/jar/backend.jar
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: 'yarn'
-
-      - name: Install Dependencies
-        run: yarn install --pure-lockfile
-
-      - name: Patch dmg-builder for Python 3
-        if: matrix.os == 'macos-latest'
-        run: |
-          sed -i '' "s/reload(sys)/import importlib; importlib.reload(sys)/g" node_modules/dmg-builder/vendor/dmgbuild/core.py
-          sed -i '' "s/sys.setdefaultencoding('UTF8')/pass/g" node_modules/dmg-builder/vendor/dmgbuild/core.py
-
-      - name: Sync Version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "Syncing version to $VERSION"
-          
-          # Update package.json versions
-          npm version $VERSION --no-git-tag-version --allow-same-version
-          cd app
-          npm version $VERSION --no-git-tag-version --allow-same-version
-          cd ..
-          
-          # Update updater.js using Python for cross-platform compatibility
-          python3 -c "
-          import re
-          path = 'app/js/lib/updater.js'
-          with open(path, 'r') as f:
-              content = f.read()
-          content = re.sub(r'const currentVersion = \".*\";', f'const currentVersion = \"$VERSION\";', content)
-          with open(path, 'w') as f:
-              f.write(content)
-          print(f'Updated {path} to version $VERSION')
-          "
-
-      - name: Build Renderer & Main
+      - name: Install frozen dependencies
+        run: yarn install --frozen-lockfile
+      - name: Verify offline hero, artifact and image loading with network denied
+        run: node scripts/verify-optimizer-offline.cjs .
+      - name: Build renderer and main
         run: yarn build
-
-      - name: Build Electron App (MacOS)
-        if: matrix.os == 'macos-latest'
-        # Skip the package-mac script and run builder directly to avoid python path issues
-        run: npx electron-builder build --mac --publish always
+      - name: Patch locked dmg-builder for Python 3
+        if: matrix.platform == 'macos'
+        run: python3 scripts/patch-dmg-python3.py node_modules/dmg-builder
+      - name: Package macOS without publishing
+        if: matrix.platform == 'macos'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHON_PATH: /usr/bin/python3
-
-
-          
-      - name: Build Electron App (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npx electron-builder build --win --x64 --publish always
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          BUILD_NUMBER: ''
+          TRAVIS_BUILD_NUMBER: ''
+          APPVEYOR_BUILD_NUMBER: ''
+          CIRCLE_BUILD_NUM: ''
+          BUILD_BUILDNUMBER: ''
+          CI_PIPELINE_IID: ''
+        run: npx electron-builder build --mac --x64 --arm64 --publish never
+      - name: Package Windows without publishing
+        if: matrix.platform == 'windows'
+        run: npx electron-builder build --win --x64 --publish never
+      - name: Verify offline cache inside built package
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/offline-draft.py verify-package release
+      - name: Record build provenance
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/offline-draft.py record release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-${{ matrix.platform }}
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.dmg
+            release/build-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 14
+
+  draft:
+    needs: build
+    if: inputs.build_only != true
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: offline-*
+          path: draft-assets
+          merge-multiple: true
+      - name: Verify packages from both builds
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+        run: python3 scripts/offline-draft.py verify draft-assets
+      - name: Create or safely reuse draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+        run: python3 scripts/offline-draft.py publish draft-assets

@@ -73,7 +73,7 @@ function UrlExists(url, cb){
 }
 
 try {
-    UrlExists('http://e7-optimizer-game-data.s3-accelerate.amazonaws.com/herodata.json?', function(status) {
+    if (!(Settings && Settings.getUseLocalCache && Settings.getUseLocalCache())) UrlExists('http://e7-optimizer-game-data.s3-accelerate.amazonaws.com/herodata.json?', function(status) {
         if(status === 200) {
            // file was found
            console.log('Amazon is available, using aws');

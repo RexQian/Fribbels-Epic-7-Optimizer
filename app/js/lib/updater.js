@@ -1,6 +1,6 @@
 const { ipcRenderer } = require('electron');
 global.ipcRenderer = ipcRenderer;
-const currentVersion = "1.11.0-offline.20260108";
+const currentVersion = "1.12.8-offline";
 
 global.TEST = false;
 
