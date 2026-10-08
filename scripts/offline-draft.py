@@ -48,6 +48,27 @@ def mac_dmg_arch(name: str, version: str) -> str | None:
     return ("arm64" if match.group(1) else "x64") if match else None
 
 
+def windows_package_kind(name: str, version: str) -> str | None:
+    for kind in ('exe', 'zip'):
+        if name == f'FribbelsE7Optimizer-Setup-{version}.{kind}':
+            return kind
+    return None
+
+
+def _windows_packages(root: Path, version: str) -> dict[str, Path]:
+    packages = {}
+    for path in root.iterdir():
+        if path.suffix.lower() not in ('.exe', '.zip'):
+            continue
+        kind = windows_package_kind(path.name, version)
+        if kind is None or kind in packages or not path.is_file() or path.is_symlink():
+            raise RuntimeError(f'Unexpected Windows package: {path.name}')
+        packages[kind] = path
+    if set(packages) != {'exe', 'zip'}:
+        raise RuntimeError('Both Windows EXE and ZIP packages are required')
+    return packages
+
+
 def _mac_zip_packages(root: Path, version: str) -> dict[str, Path]:
     packages: dict[str, Path] = {}
     for path in root.iterdir():
@@ -214,9 +235,8 @@ def verify_packaged_cache(root: Path) -> None:
         for arch, package in _mac_dmg_packages(root, version).items():
             _verify_mac_dmg(package, version, arch)
     elif platform == "windows":
-        packages = sorted(root.glob("*.zip"))
-        if not packages:
-            raise RuntimeError("No Windows ZIP package to inspect")
+        version = os.environ['RELEASE_TAG'].removeprefix('v')
+        packages = [_windows_packages(root, version)['zip']]
         for package in packages:
             with tempfile.TemporaryDirectory(prefix="e7-offline-zip-") as directory:
                 data_root = Path(directory) / "data"
@@ -246,11 +266,13 @@ def provenance(root: Path, platform: str, tag: str, run_id: str, attempt: str,
     if platform == "macos":
         version = tag.removeprefix("v")
         files = list(_mac_zip_packages(root, version).values()) + list(_mac_dmg_packages(root, version).values())
+    elif platform == 'windows':
+        files = list(_windows_packages(root, tag.removeprefix('v')).values())
     else:
-        files = sorted(path for path in root.iterdir() if path.is_file() and path.suffix.lower() == ".exe")
+        raise RuntimeError('Invalid platform')
     if not files:
         raise RuntimeError(f"Missing {platform} installation package")
-    return {"schema_version": 1, "platform": platform, "tag": tag,
+    return {"schema_version": 2, "platform": platform, "tag": tag,
             "run_id": run_id, "run_attempt": attempt, "commit": commit,
             "assets": [{"name": path.name, "sha256": digest(path), "size": path.stat().st_size}
                        for path in files]}
@@ -276,6 +298,7 @@ def verify(root: Path) -> list[Path]:
     files: list[Path] = []
     names: set[str] = set()
     mac_arches: dict[str, set[str]] = {"zip": set(), "dmg": set()}
+    windows_kinds = set()
     for platform in ("macos", "windows"):
         meta_path = root / f"build-{platform}.json"
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -296,8 +319,11 @@ def verify(root: Path) -> list[Path]:
                 if arch is None or arch in mac_arches[kind]:
                     raise RuntimeError("Build artifact platform mismatch")
                 mac_arches[kind].add(arch)
-            elif not name.lower().endswith(".exe"):
-                raise RuntimeError("Build artifact platform mismatch")
+            else:
+                kind = windows_package_kind(name, tag.removeprefix('v'))
+                if kind is None or kind in windows_kinds:
+                    raise RuntimeError("Build artifact platform mismatch")
+                windows_kinds.add(kind)
             path = root / name
             if not path.is_file() or path.stat().st_size != item.get("size") or digest(path) != item.get("sha256"):
                 raise RuntimeError(f"Build artifact differs: {name}")
@@ -306,6 +332,8 @@ def verify(root: Path) -> list[Path]:
         files.append(meta_path)
     if any(arches != {"x64", "arm64"} for arches in mac_arches.values()):
         raise RuntimeError("Draft is missing an x64 or arm64 macOS ZIP or DMG")
+    if windows_kinds != {'exe', 'zip'}:
+        raise RuntimeError('Draft is missing Windows EXE or ZIP')
     return files
 
 
