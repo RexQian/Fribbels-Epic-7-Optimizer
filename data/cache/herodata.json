@@ -5722,6 +5722,161 @@
     },
     "zodiac": "ram"
   },
+  "Bunny Girl Great Detective Moro": {
+    "_id": "bunny-girl-great-detective-moro",
+    "assets": {
+      "icon": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/c2187_s.png",
+      "image": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/question_circle.png",
+      "thumbnail": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/c2187_l.png"
+    },
+    "attribute": "light",
+    "calculatedStatus": {
+      "lv50FiveStarFullyAwakened": {
+        "atk": 862,
+        "chc": 0.15,
+        "chd": 1.5,
+        "cp": 16597,
+        "dac": 0.03,
+        "def": 393,
+        "eff": 0.06,
+        "efr": 0,
+        "hp": 4429,
+        "spd": 128
+      },
+      "lv60SixStarFullyAwakened": {
+        "atk": 1075,
+        "chc": 0.15,
+        "chd": 1.5,
+        "cp": 21203,
+        "dac": 0.03,
+        "def": 487,
+        "eff": 0.18,
+        "efr": 0,
+        "hp": 5562,
+        "spd": 128
+      }
+    },
+    "code": "c2187",
+    "ex_equip": [],
+    "name": "Bunny Girl Great Detective Moro",
+    "rarity": 5,
+    "role": "assassin",
+    "self_devotion": {
+      "grades": {
+        "A": 0.14,
+        "B": 0.09,
+        "S": 0.19,
+        "SS": 0.23,
+        "SSS": 0.27
+      },
+      "type": "acc"
+    },
+    "skills": {
+      "S1": {
+        "hitTypes": [
+          "crit",
+          "crushing",
+          "normal",
+          "miss"
+        ],
+        "options": [],
+        "pow": 1,
+        "rate": 1,
+        "targets": 1
+      },
+      "S2": {
+        "hitTypes": [],
+        "options": []
+      },
+      "S3": {
+        "hitTypes": [
+          "crit",
+          "crushing",
+          "normal",
+          "miss"
+        ],
+        "options": [],
+        "pow": 1,
+        "rate": 1.5,
+        "targets": 1
+      }
+    },
+    "zodiac": "maiden"
+  },
+  "Bunny Girl Mafia Yufine": {
+    "_id": "bunny-girl-mafia-yufine",
+    "assets": {
+      "icon": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/c7016_s.png",
+      "image": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/question_circle.png",
+      "thumbnail": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/c7016_l.png"
+    },
+    "attribute": "ice",
+    "calculatedStatus": {
+      "lv50FiveStarFullyAwakened": {
+        "atk": 716,
+        "chc": 0.15,
+        "chd": 1.5,
+        "cp": 17286,
+        "dac": 0.03,
+        "def": 559,
+        "eff": 0,
+        "efr": 0,
+        "hp": 5446,
+        "spd": 100
+      },
+      "lv60SixStarFullyAwakened": {
+        "atk": 894,
+        "chc": 0.15,
+        "chd": 1.5,
+        "cp": 21972,
+        "dac": 0.03,
+        "def": 694,
+        "eff": 0,
+        "efr": 0,
+        "hp": 6840,
+        "spd": 104
+      }
+    },
+    "code": "c7016",
+    "ex_equip": [],
+    "name": "Bunny Girl Mafia Yufine",
+    "rarity": 5,
+    "role": "knight",
+    "self_devotion": {
+      "grades": {
+        "A": 0.14,
+        "B": 0.09,
+        "S": 0.19,
+        "SS": 0.23,
+        "SSS": 0.27
+      },
+      "type": "res"
+    },
+    "skills": {
+      "S1": {
+        "hitTypes": [
+          "normal",
+          "miss"
+        ],
+        "note": "100% penetration",
+        "options": [],
+        "penetration": 1,
+        "pow": 1,
+        "rate": 0.5,
+        "selfHpScaling": 0.05,
+        "targets": 1
+      },
+      "S2": {
+        "hitTypes": [],
+        "options": []
+      },
+      "S3": {
+        "hitTypes": [],
+        "options": []
+      }
+    },
+    "zodiac": "archer"
+  },
   "Butcher Corps Inquisitor": {
     "_id": "butcher-corps-inquisitor",
     "assets": {

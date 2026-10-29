@@ -10,6 +10,17 @@
       "health": 76
     }
   },
+  "A Boss's Dignity": {
+    "code": "efk26",
+    "name": "A Boss's Dignity",
+    "rarity": 5,
+    "role": "knight",
+    "stats": {
+      "attack": 9,
+      "defense": 0,
+      "health": 76
+    }
+  },
   "A Little Queen's Huge Crown": {
     "code": "efw21",
     "name": "A Little Queen's Huge Crown",
