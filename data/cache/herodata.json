@@ -5877,6 +5877,100 @@
     },
     "zodiac": "archer"
   },
+  "Bunny Girl Maid Cecilia": {
+    "_id": "bunny-girl-maid-cecilia",
+    "assets": {
+      "icon": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/c5002_s.png",
+      "image": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/question_circle.png",
+      "thumbnail": "https://raw.githubusercontent.com/fribbels/Fribbels-Epic-7-Optimizer/main/data/cachedimages/c5002_l.png"
+    },
+    "attribute": "wind",
+    "calculatedStatus": {
+      "lv50FiveStarFullyAwakened": {
+        "atk": 498,
+        "chc": 0.15,
+        "chd": 1.5,
+        "cp": 16072,
+        "dac": 0.03,
+        "def": 625,
+        "eff": 0,
+        "efr": 0,
+        "hp": 4578,
+        "spd": 100
+      },
+      "lv60SixStarFullyAwakened": {
+        "atk": 621,
+        "chc": 0.15,
+        "chd": 1.5,
+        "cp": 20427,
+        "dac": 0.03,
+        "def": 775,
+        "eff": 0,
+        "efr": 0,
+        "hp": 6034,
+        "spd": 100
+      }
+    },
+    "code": "c5002",
+    "ex_equip": [],
+    "name": "Bunny Girl Maid Cecilia",
+    "rarity": 5,
+    "role": "manauser",
+    "self_devotion": {
+      "grades": {
+        "A": 0.11,
+        "B": 0.07,
+        "S": 0.15,
+        "SS": 0.18,
+        "SSS": 0.21
+      },
+      "type": "max_hp_rate"
+    },
+    "skills": {
+      "S1": {
+        "hitTypes": [
+          "crit",
+          "crushing",
+          "normal",
+          "miss"
+        ],
+        "options": [
+          {
+            "name": "S1 heal",
+            "pow": 0,
+            "rate": 0,
+            "selfHpScaling": 0.07
+          },
+          {
+            "name": "S1 soulburn heal",
+            "pow": 0,
+            "rate": 0,
+            "selfHpScaling": 0.17
+          }
+        ],
+        "pow": 1,
+        "rate": 1,
+        "targets": 1
+      },
+      "S2": {
+        "hitTypes": [],
+        "options": []
+      },
+      "S3": {
+        "hitTypes": [
+          "crit",
+          "crushing",
+          "normal",
+          "miss"
+        ],
+        "options": [],
+        "pow": 1,
+        "rate": 1.2,
+        "targets": 3
+      }
+    },
+    "zodiac": "crab"
+  },
   "Butcher Corps Inquisitor": {
     "_id": "butcher-corps-inquisitor",
     "assets": {
@@ -6091,7 +6185,14 @@
       }
     },
     "code": "c2128",
-    "ex_equip": [],
+    "ex_equip": [
+      {
+        "stat": {
+          "type": "att_rate",
+          "value": 0.07
+        }
+      }
+    ],
     "name": "Bystander Hwayoung",
     "rarity": 5,
     "role": "warrior",
@@ -9406,28 +9507,28 @@
     "attribute": "dark",
     "calculatedStatus": {
       "lv50FiveStarFullyAwakened": {
-        "atk": 498,
+        "atk": 629,
         "chc": 0.15,
         "chd": 1.5,
-        "cp": 16072,
+        "cp": 15958,
         "dac": 0.03,
-        "def": 625,
-        "eff": 0,
+        "def": 511,
+        "eff": 0.3,
         "efr": 0,
-        "hp": 4578,
-        "spd": 100
+        "hp": 3840,
+        "spd": 114
       },
       "lv60SixStarFullyAwakened": {
-        "atk": 621,
+        "atk": 785,
         "chc": 0.15,
         "chd": 1.5,
-        "cp": 20427,
+        "cp": 20292,
         "dac": 0.03,
-        "def": 775,
-        "eff": 0,
+        "def": 634,
+        "eff": 0.3,
         "efr": 0,
-        "hp": 6034,
-        "spd": 100
+        "hp": 5077,
+        "spd": 114
       }
     },
     "code": "c2090",
@@ -9467,7 +9568,7 @@
         "options": []
       }
     },
-    "zodiac": "crab"
+    "zodiac": "scorpion"
   },
   "Desert Jewel Basar": {
     "_id": "desert-jewel-basar",
@@ -14010,7 +14111,7 @@
         "penetration": 1,
         "pow": 1,
         "rate": 0.3,
-        "selfDefScaling": 0.5,
+        "selfDefScaling": 0.7,
         "targets": 3
       }
     },
@@ -25346,7 +25447,14 @@
       }
     },
     "code": "c2102",
-    "ex_equip": [],
+    "ex_equip": [
+      {
+        "stat": {
+          "type": "acc",
+          "value": 0.08
+        }
+      }
+    ],
     "name": "Requiem Roana",
     "rarity": 5,
     "role": "mage",
@@ -25370,7 +25478,7 @@
         ],
         "options": [],
         "pow": 1,
-        "rate": 1,
+        "rate": 0.7,
         "targets": 1
       },
       "S2": {
@@ -33264,7 +33372,7 @@
         ],
         "options": [],
         "pow": 1,
-        "rate": 1,
+        "rate": 1.2,
         "targets": 1
       },
       "S2": {
@@ -33274,7 +33382,14 @@
           "normal",
           "miss"
         ],
-        "options": [],
+        "options": [
+          {
+            "name": "S2 barrier",
+            "pow": 0,
+            "rate": 0,
+            "selfAtkScaling": 1
+          }
+        ],
         "pow": 1,
         "rate": 1.2,
         "targets": 3
@@ -33289,7 +33404,7 @@
         "options": [],
         "pow": 1,
         "rate": 1.4,
-        "selfHpScaling": 0.05,
+        "selfHpScaling": 0.07,
         "targets": 1
       }
     },

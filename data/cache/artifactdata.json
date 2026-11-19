@@ -582,6 +582,17 @@
       "health": 76
     }
   },
+  "Covert Service": {
+    "code": "efh30",
+    "name": "Covert Service",
+    "rarity": 5,
+    "role": "manauser",
+    "stats": {
+      "attack": 9,
+      "defense": 0,
+      "health": 76
+    }
+  },
   "Cradle of Life": {
     "code": "efw16",
     "name": "Cradle of Life",
